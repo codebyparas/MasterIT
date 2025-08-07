@@ -2,11 +2,10 @@ import 'package:learningdart/models/category_model.dart';
 import 'package:learningdart/models/stats_model.dart';
 import 'package:learningdart/models/achievements_model.dart';
 import 'package:flutter/material.dart';
-import 'package:learningdart/constants/routes.dart';
-import 'package:learningdart/services/auth/auth_service.dart';
 import 'package:learningdart/enums/menu_action.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:learningdart/utilities/logout_helper.dart';
 
 // ignore: must_be_immutable
 class UserHomeView extends StatelessWidget {
@@ -73,12 +72,8 @@ class UserHomeView extends StatelessWidget {
             onSelected: (value) async {
               switch (value) {
                 case MenuAction.logout:
-                  final navigator = Navigator.of(context);
-                  final shouldLogout = await showLogOutDialog(context);
-                  if (shouldLogout) {
-                    await AuthService.firebase().logout();
-                    navigator.pushNamedAndRemoveUntil(loginRoute, (_) => false);
-                  }
+                  // final navigator = Navigator.of(context);
+                  await handleLogout(context);
               }
             },
             itemBuilder: (context) => const [
@@ -414,30 +409,4 @@ class UserHomeView extends StatelessWidget {
       ),
     );
   }
-}
-
-Future<bool> showLogOutDialog(BuildContext context) {
-  return showDialog(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text("Are you sure you want to log out?"),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(false);
-            },
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(true);
-            },
-            child: const Text("Log Out"),
-          ),
-        ],
-      );
-    },
-  ).then((value) => value ?? false);
 }

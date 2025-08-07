@@ -1,7 +1,9 @@
 // admin_panel_view.dart
 
 import 'package:flutter/material.dart';
+import 'package:learningdart/enums/menu_action.dart';
 import 'package:learningdart/services/cloud/firebase_cloud_storage.dart';
+import 'package:learningdart/utilities/logout_helper.dart';
 
 class AdminPanelView extends StatefulWidget {
   const AdminPanelView({super.key});
@@ -253,7 +255,25 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Panel'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('Admin Panel'), 
+        centerTitle: true,
+        actions: [
+          PopupMenuButton<MenuAction>(
+            onSelected: (value) async {
+              if (value == MenuAction.logout) {
+                await handleLogout(context);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<MenuAction>(
+                value: MenuAction.logout,
+                child: Text("Logout"),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Card(

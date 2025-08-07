@@ -19,19 +19,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // final user = AuthService.firebase().currentUser;
+    final user = AuthService.firebase().currentUser;
     late final Widget homeWidget;
-
-    // if (user != null) {
-    //   if (user.isEmailVerified) {
-    //     homeWidget = const LoginView();
-    //   } else {
-    //     homeWidget = const VerifyEmailView();
-    //   }
-    // } else {
-    //   homeWidget = const LoginView();
-    // }
-    homeWidget=AdminPanelView();
+    if (user != null) {
+      if (user.isEmailVerified) {
+        homeWidget = const LoginView();
+      } else {
+        homeWidget = const VerifyEmailView();
+      }
+    } else {
+      homeWidget = const LoginView();
+    }
+    // homeWidget=AdminPanelView();
 
     return MaterialApp(
       title: 'MasterIT',

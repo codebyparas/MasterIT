@@ -124,27 +124,29 @@ class _LoginViewState extends State<LoginView> {
                       try {
                         await AuthService.firebase().logIn(email: email, password: password);
                         final user = AuthService.firebase().currentUser;
-                      
                         if (user?.isEmailVerified ?? false) {
+                          final isAdmin = email.trim() == 'paras140902@gmail.com' && password == 'parasachdeva';
+                        
+                          if (isAdmin) {
+                            navigator.pushNamedAndRemoveUntil(adminPanelRoute, (_) => false); // Ensure route exists
+                            return;
+                          }
                           final userId = user!.id;
-                      
                           final userDoc = await FirebaseFirestore.instance
                               .collection('users')
                               .doc(userId)
                               .get();
-                      
+                        
                           if (!userDoc.exists) {
-                            // First-time login — create Firestore document
                             await FirebaseCloudStorage().createUser(
                               uid: userId,
                               email: user.email,
                             );
-                      
                             navigator.pushNamedAndRemoveUntil(selectUsernameRoute, (_) => false);
                           } else {
                             final data = userDoc.data();
                             final isInitialSetupDone = data?['initialSetupDone'] ?? false;
-                      
+                        
                             if (isInitialSetupDone) {
                               navigator.pushNamedAndRemoveUntil(userHomeRoute, (_) => false);
                             } else {
