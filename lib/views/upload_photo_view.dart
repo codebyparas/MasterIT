@@ -16,7 +16,7 @@ class _UploadPhotoViewState extends State<UploadPhotoView> {
   List<String> _imageUrls = [];
 
   final supabase = Supabase.instance.client;
-  final bucketName = 'photos'; // make sure this matches your bucket
+  final bucketName = 'photos';
 
   @override
   void initState() {
