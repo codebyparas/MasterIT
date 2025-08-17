@@ -1,6 +1,5 @@
-// admin_panel_view.dart
-
 import 'package:flutter/material.dart';
+import 'package:learningdart/constants/routes.dart';
 import 'package:learningdart/enums/menu_action.dart';
 import 'package:learningdart/services/cloud/firebase_cloud_storage.dart';
 import 'package:learningdart/utilities/logout_helper.dart';
@@ -9,11 +8,14 @@ class AdminPanelView extends StatefulWidget {
   const AdminPanelView({super.key});
 
   @override
-  _AdminPanelViewState createState() => _AdminPanelViewState();
+  State<AdminPanelView> createState() => _AdminPanelViewState();
 }
 
 class _AdminPanelViewState extends State<AdminPanelView> {
   final _manager = FirebaseCloudStorage();
+
+  final _formKey = GlobalKey<FormState>();
+
   String selectedEntryType = 'Subject';
   final List<String> entryTypes = ['Subject', 'Topic', 'Question'];
 
@@ -30,6 +32,8 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   final optionC = TextEditingController();
   final optionD = TextEditingController();
   final correctAnswer = TextEditingController();
+
+  bool isSubmitting = false;
 
   @override
   void initState() {
@@ -52,66 +56,70 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   }
 
   Future<void> _handleSubmit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => isSubmitting = true);
     try {
-      if (selectedEntryType == 'Subject') {
-        final subjectName = subjectNameController.text.trim();
-        if (subjectName.isEmpty) throw Exception("Subject name cannot be empty");
+      switch (selectedEntryType) {
+        case 'Subject':
+          final subjectName = subjectNameController.text.trim();
+          final exists = subjects.any((s) =>
+              (s['name'] as String).toLowerCase() ==
+              subjectName.toLowerCase());
+          if (exists) throw Exception("Subject already exists");
+          await _manager.addSubject(subjectName);
+          break;
 
-        final exists = subjects.any((s) => (s['name'] as String).toLowerCase() == subjectName.toLowerCase());
-        if (exists) throw Exception("Subject already exists");
+        case 'Topic':
+          if (selectedSubjectId == null) {
+            throw Exception("Please select a subject.");
+          }
+          final topicName = topicNameController.text.trim();
+          final duplicate = topics.any((t) =>
+              (t['name'] as String).toLowerCase() ==
+              topicName.toLowerCase());
+          if (duplicate) throw Exception("Topic already exists.");
+          final topicId = await _manager.addTopic(
+            name: topicName,
+            subjectId: selectedSubjectId!,
+          );
+          await _manager.addTopicReferenceToSubject(
+            selectedSubjectId!,
+            topicId,
+          );
+          break;
 
-        await _manager.addSubject(subjectName);
+        case 'Question':
+          if (selectedSubjectId == null || selectedTopicId == null) {
+            throw Exception("Please select subject and topic.");
+          }
+          await _manager.addMCQQuestion(
+            subjectId: selectedSubjectId!,
+            topicId: selectedTopicId!,
+            questionText: questionTextController.text.trim(),
+            options: [
+              optionA.text.trim(),
+              optionB.text.trim(),
+              optionC.text.trim(),
+              optionD.text.trim(),
+            ],
+            correctAnswer: correctAnswer.text.trim(),
+          );
+          break;
       }
-
-      else if (selectedEntryType == 'Topic') {
-        final topicName = topicNameController.text.trim();
-        if (topicName.isEmpty) throw Exception("Topic name cannot be empty");
-        if (selectedSubjectId == null) throw Exception("Select a subject");
-
-        final currentTopics = await _manager.getTopics(selectedSubjectId!);
-        final duplicate = currentTopics.any((t) => (t['name'] as String).toLowerCase() == topicName.toLowerCase());
-        if (duplicate) throw Exception("Topic already exists under this subject");
-
-        final topicId = await _manager.addTopic(
-          name: topicName,
-          subjectId: selectedSubjectId!,
-        );
-
-        // Update subject doc to include topic
-        await _manager.addTopicReferenceToSubject(selectedSubjectId!, topicId);
-      }
-
-      else if (selectedEntryType == 'Question') {
-        final qText = questionTextController.text.trim();
-        if (qText.isEmpty || selectedTopicId == null || selectedSubjectId == null) {
-          throw Exception("All fields must be filled");
-        }
-
-        await _manager.addMCQQuestion(
-          subjectId: selectedSubjectId!,
-          topicId: selectedTopicId!,
-          questionText: qText,
-          options: [
-            optionA.text.trim(),
-            optionB.text.trim(),
-            optionC.text.trim(),
-            optionD.text.trim(),
-          ],
-          correctAnswer: correctAnswer.text.trim(),
-        );
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Submitted successfully!')),
-      );
 
       _resetForm();
       await _loadSubjects();
 
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Entry added successfully!')),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
+        SnackBar(content: Text(e.toString())),
       );
+    } finally {
+      setState(() => isSubmitting = false);
     }
   }
 
@@ -132,28 +140,32 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     });
   }
 
-  // UI BUILDERS
+  Widget _buildFormField({
+    required String label,
+    required TextEditingController controller,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          border: const OutlineInputBorder(),
+          labelText: label,
+        ),
+        validator: (val) => val == null || val.trim().isEmpty
+            ? 'Required'
+            : null,
+      ),
+    );
+  }
 
-  Widget _buildSubjectForm() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Add Subject', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
-          TextField(
-            controller: subjectNameController,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Subject Name',
-            ),
-          ),
-        ],
+  Widget _buildSubjectForm() => _buildFormField(
+        label: 'Subject Name',
+        controller: subjectNameController,
       );
 
   Widget _buildTopicForm() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Add Topic', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             value: selectedSubjectId,
             decoration: const InputDecoration(
@@ -161,32 +173,26 @@ class _AdminPanelViewState extends State<AdminPanelView> {
               labelText: 'Select Subject',
             ),
             items: subjects
-                .map((s) => DropdownMenuItem(value: s['id'] as String, child: Text(s['name'] as String)))
+                .map((s) => DropdownMenuItem(
+                      value: s['id'] as String,
+                      child: Text(s['name'] as String),
+                    ))
                 .toList(),
             onChanged: (val) {
-              if (val != null) {
-                setState(() {
-                  selectedSubjectId = val;
-                });
-              }
+              setState(() => selectedSubjectId = val);
+              if (val != null) _loadTopics(val);
             },
           ),
           const SizedBox(height: 10),
-          TextField(
+          _buildFormField(
+            label: 'Topic Name',
             controller: topicNameController,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Topic Name',
-            ),
           ),
         ],
       );
 
   Widget _buildQuestionForm() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Add MCQ Question', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             value: selectedSubjectId,
             decoration: const InputDecoration(
@@ -194,17 +200,17 @@ class _AdminPanelViewState extends State<AdminPanelView> {
               labelText: 'Select Subject',
             ),
             items: subjects
-                .map((s) => DropdownMenuItem(value: s['id'] as String, child: Text(s['name'] as String)))
+                .map((s) => DropdownMenuItem(
+                      value: s['id'] as String,
+                      child: Text(s['name'] as String),
+                    ))
                 .toList(),
             onChanged: (val) {
-              if (val != null) {
-                setState(() {
-                  selectedSubjectId = val;
-                  selectedTopicId = null;
-                  topics = [];
-                });
-                _loadTopics(val);
-              }
+              setState(() {
+                selectedSubjectId = val;
+                selectedTopicId = null;
+              });
+              if (val != null) _loadTopics(val);
             },
           ),
           const SizedBox(height: 10),
@@ -215,39 +221,25 @@ class _AdminPanelViewState extends State<AdminPanelView> {
               labelText: 'Select Topic',
             ),
             items: topics
-                .map((t) => DropdownMenuItem(value: t['id'] as String, child: Text(t['name'] as String)))
+                .map((t) => DropdownMenuItem(
+                      value: t['id'] as String,
+                      child: Text(t['name'] as String),
+                    ))
                 .toList(),
-            onChanged: (val) {
-              if (val != null) {
-                setState(() {
-                  selectedTopicId = val;
-                });
-              }
-            },
+            onChanged: (val) => setState(() => selectedTopicId = val),
           ),
           const SizedBox(height: 10),
-          TextField(
+          _buildFormField(
+            label: 'Question Text',
             controller: questionTextController,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Question Text',
-            ),
           ),
-          const SizedBox(height: 8),
-          TextField(controller: optionA, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Option A')),
-          const SizedBox(height: 8),
-          TextField(controller: optionB, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Option B')),
-          const SizedBox(height: 8),
-          TextField(controller: optionC, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Option C')),
-          const SizedBox(height: 8),
-          TextField(controller: optionD, decoration: const InputDecoration(border: OutlineInputBorder(), labelText: 'Option D')),
-          const SizedBox(height: 8),
-          TextField(
+          _buildFormField(label: 'Option A', controller: optionA),
+          _buildFormField(label: 'Option B', controller: optionB),
+          _buildFormField(label: 'Option C', controller: optionC),
+          _buildFormField(label: 'Option D', controller: optionD),
+          _buildFormField(
+            label: 'Correct Answer (A/B/C/D)',
             controller: correctAnswer,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Correct Answer (A/B/C/D)',
-            ),
           ),
         ],
       );
@@ -256,8 +248,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin Panel'), 
-        centerTitle: true,
+        title: const Text('Admin Panel'),
         actions: [
           PopupMenuButton<MenuAction>(
             onSelected: (value) async {
@@ -265,8 +256,8 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                 await handleLogout(context);
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem<MenuAction>(
+            itemBuilder: (_) => const [
+              PopupMenuItem(
                 value: MenuAction.logout,
                 child: Text("Logout"),
               ),
@@ -274,51 +265,89 @@ class _AdminPanelViewState extends State<AdminPanelView> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
           child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: ListView(
-              children: [
-                const Text('What would you like to add?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: selectedEntryType,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Entry Type',
+            padding: const EdgeInsets.all(20),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  const Text(
+                    'Add Entry',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-                  items: entryTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        selectedEntryType = val;
-                        selectedSubjectId = null;
-                        selectedTopicId = null;
-                        topics = [];
-                      });
-                    }
-                  },
-                ),
+                  const SizedBox(height: 20),
+                  DropdownButtonFormField<String>(
+                    value: selectedEntryType,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Entry Type',
+                    ),
+                    items: entryTypes
+                        .map((e) =>
+                            DropdownMenuItem(value: e, child: Text(e)))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          selectedEntryType = val;
+                          selectedSubjectId = null;
+                          selectedTopicId = null;
+                          topics = [];
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  if (selectedEntryType == 'Subject') _buildSubjectForm(),
+                  if (selectedEntryType == 'Topic') _buildTopicForm(),
+                  if (selectedEntryType == 'Question') _buildQuestionForm(),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: isSubmitting
+                          ? const CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            )
+                          : const Text("Submit"),
+                      onPressed: isSubmitting ? null : _handleSubmit,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        textStyle: const TextStyle(fontSize: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 20),
-                if (selectedEntryType == 'Subject') _buildSubjectForm(),
-                if (selectedEntryType == 'Topic') _buildTopicForm(),
-                if (selectedEntryType == 'Question') _buildQuestionForm(),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.upload),
-                  label: const Text('Submit'),
-                  onPressed: _handleSubmit,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    textStyle: const TextStyle(fontSize: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pushNamed(context, dragQuesRoute); // <-- Replace with your actual route
+                      },
+                      child: const Text('Drag & Drop'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pushNamed(context, mapQuesRoute); // <-- Replace with your actual route
+                      },
+                      child: const Text('Tap'),
+                    ),
+                  ],
                 ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

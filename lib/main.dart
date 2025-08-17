@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:learningdart/constants/routes.dart';
 import 'package:learningdart/views/admin_panel_view.dart';
+import 'package:learningdart/views/drag_ques_test.dart';
+import 'package:learningdart/views/map_ques_test.dart';
 import 'package:learningdart/views/select_username_view.dart';
 import 'package:learningdart/views/user_home_view.dart';
 import 'package:learningdart/services/auth/auth_service.dart';
@@ -30,12 +32,11 @@ class MyApp extends StatelessWidget {
     } else {
       homeWidget = const LoginView();
     }
-    // homeWidget=AdminPanelView();
 
     return MaterialApp(
       title: 'MasterIT',
       theme: ThemeData(useMaterial3: false, primarySwatch: Colors.blue),
-      home: homeWidget, // home: HomePage(),
+      home: homeWidget,
       debugShowCheckedModeBanner: false,
       routes: {
         loginRoute: (context) => const LoginView(),
@@ -44,6 +45,8 @@ class MyApp extends StatelessWidget {
         userHomeRoute: (context) => UserHomeView(),
         selectUsernameRoute: (context) => SelectUsernameView(),
         adminPanelRoute: (context) => AdminPanelView(),
+        dragQuesRoute: (context) => DragQuesView(),
+        mapQuesRoute: (context) => MapQuesView(),
       },
     );
   }

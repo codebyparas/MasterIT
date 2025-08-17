@@ -24,7 +24,7 @@ class _MapQuesViewState extends State<MapQuesView> {
     Region(name: 'Nepal', bounds: Rect.fromLTWH(148, 92, 90, 59)),
   ];
 
-  final String correctAnswer = 'India';
+  final String correctAnswer = 'Nepal';
 
   void _onTap(TapDownDetails details) {
     final Offset position = details.localPosition;

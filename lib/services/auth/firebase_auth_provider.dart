@@ -14,7 +14,7 @@ class FirebaseAuthProvider implements AuthProvider{
       if(user!=null){
         return user;
       }else{
-        throw UserNotLoggedInAuthxception();
+        throw UserNotLoggedInAuthException();
       }
     } on FirebaseAuthException catch(e){
       if (e.code == "weak-password") {
@@ -49,7 +49,7 @@ class FirebaseAuthProvider implements AuthProvider{
       if(user!=null){
         return user;
       }else{
-        throw UserNotLoggedInAuthxception();
+        throw UserNotLoggedInAuthException();
       }
     } on FirebaseAuthException catch(e){
       if (e.code == "invalid-credential") {
@@ -68,7 +68,7 @@ class FirebaseAuthProvider implements AuthProvider{
     if(user!=null){
       await FirebaseAuth.instance.signOut();
     }else{
-      throw UserNotLoggedInAuthxception();
+      throw UserNotLoggedInAuthException();
     }
   }
 

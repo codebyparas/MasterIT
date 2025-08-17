@@ -6,3 +6,6 @@ const userHomeRoute='/user-home/';
 const selectUsernameRoute='/select-username/';
 const initialQuizRoute='/initial_quiz/';
 const adminPanelRoute='/admin-panel/';
+
+const mapQuesRoute='/map-ques/';
+const dragQuesRoute='/drag-ques/';
