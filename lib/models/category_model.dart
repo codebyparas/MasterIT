@@ -11,57 +11,51 @@ class CategoryModel {
     required this.boxColor,
   });
 
-  static List<CategoryModel> getCategories() {
-    List<CategoryModel> categories = [];
-
-    categories.add(
-      CategoryModel(
-        name: 'Java',
-        iconPath: 'assets/icons/java.svg',
-        boxColor: Color(0xff9DCEFF),
-      ),
-    );
-
-    categories.add(
-      CategoryModel(
-        name: 'Geography',
-        iconPath: 'assets/icons/planet-earth.svg',
-        boxColor: Color(0xffEEA4CE),
-      ),
-    );
-
-    categories.add(
-      CategoryModel(
-        name: 'Aptitude',
-        iconPath: 'assets/icons/mind-smart-light-bulb.svg',
-        boxColor: Color(0xff9DCEFF),
-      ),
-    );
-
-    categories.add(
-      CategoryModel(
-        name: 'Biology',
-        iconPath: 'assets/icons/java.svg',
-        boxColor: Color(0xffEEA4CE),
-      ),
-    );
-
-    categories.add(
-      CategoryModel(
-        name: 'History',
-        iconPath: 'assets/icons/java.svg',
-        boxColor: Color(0xff9DCEFF),
-      ),
-    );
-
-    categories.add(
-      CategoryModel(
-        name: 'Vocabulary',
-        iconPath: 'assets/icons/java.svg',
-        boxColor: Color(0xffEEA4CE),
-      ),
-    );
-
-    return categories;
+  /// Factory to map subject string → category design
+  factory CategoryModel.fromSubject(String subject) {
+    switch (subject.toLowerCase()) {
+      case "java":
+        return CategoryModel(
+          name: "Java",
+          iconPath: "assets/icons/java.svg",
+          boxColor: const Color(0xff9DCEFF),
+        );
+      case "geography":
+        return CategoryModel(
+          name: "Geography",
+          iconPath: "assets/icons/planet-earth.svg",
+          boxColor: const Color(0xffEEA4CE),
+        );
+      case "aptitude":
+        return CategoryModel(
+          name: "Aptitude",
+          iconPath: "assets/icons/mind-smart-light-bulb.svg",
+          boxColor: const Color(0xff9DCEFF),
+        );
+      case "biology":
+        return CategoryModel(
+          name: "Biology",
+          iconPath: "assets/icons/biology.svg", // add correct icon
+          boxColor: const Color(0xffEEA4CE),
+        );
+      case "history":
+        return CategoryModel(
+          name: "History",
+          iconPath: "assets/icons/history.svg", // add correct icon
+          boxColor: const Color(0xff9DCEFF),
+        );
+      case "vocabulary":
+        return CategoryModel(
+          name: "Vocabulary",
+          iconPath: "assets/icons/vocabulary.svg", // add correct icon
+          boxColor: const Color(0xffEEA4CE),
+        );
+      default:
+        return CategoryModel(
+          name: subject,
+          iconPath: "assets/icons/default.svg",
+          boxColor: Colors.grey,
+        );
+    }
   }
 }

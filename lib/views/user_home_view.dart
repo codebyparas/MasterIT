@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:learningdart/models/category_model.dart';
 import 'package:learningdart/models/stats_model.dart';
 import 'package:learningdart/models/achievements_model.dart';
@@ -7,23 +9,55 @@ import 'package:learningdart/enums/menu_action.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:learningdart/utilities/logout_helper.dart';
 
-// ignore: must_be_immutable
-class UserHomeView extends StatelessWidget {
-  UserHomeView({super.key});
+class UserHomeView extends StatefulWidget {
+  const UserHomeView({super.key});
 
+  @override
+  State<UserHomeView> createState() => _UserHomeViewState();
+}
+
+class _UserHomeViewState extends State<UserHomeView> {
   List<CategoryModel> categories = [];
   List<StatsModel> stats = [];
   List<AchievementsModel> achievments = [];
 
+  @override
+  void initState() {
+    super.initState();
+    _getInitialInfo();
+    _loadUserSubjects();
+  }
+
   void _getInitialInfo() {
-    categories = CategoryModel.getCategories();
     stats = StatsModel.getDiets();
     achievments = AchievementsModel.getPopularDiets();
   }
 
+  Future<void> _loadUserSubjects() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      if (userDoc.exists) {
+        List<dynamic> topics = userDoc['topicsIntroduced'] ?? [];
+
+        // Map each subject to a CategoryModel
+        List<CategoryModel> loaded = topics.map((topic) {
+          return CategoryModel.fromSubject(topic.toString());
+        }).toList();
+
+        setState(() {
+          categories = loaded;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading user subjects: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    _getInitialInfo();
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -72,7 +106,6 @@ class UserHomeView extends StatelessWidget {
             onSelected: (value) async {
               switch (value) {
                 case MenuAction.logout:
-                  // final navigator = Navigator.of(context);
                   await handleLogout(context);
               }
             },
@@ -106,95 +139,6 @@ class UserHomeView extends StatelessWidget {
           const SizedBox(height: 40),
           _dietSection(),
           const SizedBox(height: 40),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(left: 20),
-                child: Text(
-                  'Achievements',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 15),
-              // ListView.separated(
-              //   itemCount: popularDiets.length,
-              //   shrinkWrap: true,
-              //   physics: const NeverScrollableScrollPhysics(),
-              //   separatorBuilder: (context, index) =>
-              //       const SizedBox(height: 25),
-              //   padding: const EdgeInsets.symmetric(horizontal: 20),
-              //   itemBuilder: (context, index) {
-              //     return Container(
-              //       height: 100,
-              //       decoration: BoxDecoration(
-              //         color: popularDiets[index].boxIsSelected
-              //             ? Colors.white
-              //             : Colors.transparent,
-              //         borderRadius: BorderRadius.circular(16),
-              //         boxShadow: popularDiets[index].boxIsSelected
-              //             ? [
-              //                 BoxShadow(
-              //                   color: const Color(
-              //                     0xff1D1617,
-              //                   ).withOpacity(0.07),
-              //                   offset: const Offset(0, 10),
-              //                   blurRadius: 40,
-              //                   spreadRadius: 0,
-              //                 ),
-              //               ]
-              //             : [],
-              //       ),
-              //       child: Row(
-              //         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              //         children: [
-              //           SvgPicture.asset(
-              //             popularDiets[index].iconPath,
-              //             width: 65,
-              //             height: 65,
-              //           ),
-              //           Column(
-              //             mainAxisAlignment: MainAxisAlignment.center,
-              //             crossAxisAlignment: CrossAxisAlignment.start,
-              //             children: [
-              //               Text(
-              //                 popularDiets[index].name,
-              //                 style: const TextStyle(
-              //                   fontWeight: FontWeight.w500,
-              //                   color: Colors.black,
-              //                   fontSize: 16,
-              //                 ),
-              //               ),
-              //               Text(
-              //                 '${popularDiets[index].level} | ${popularDiets[index].duration} | ${popularDiets[index].calorie}',
-              //                 style: const TextStyle(
-              //                   color: Color(0xff7B6F72),
-              //                   fontSize: 13,
-              //                   fontWeight: FontWeight.w400,
-              //                 ),
-              //               ),
-              //             ],
-              //           ),
-              //           GestureDetector(
-              //             onTap: () {},
-              //             child: SvgPicture.asset(
-              //               'assets/icons/button.svg',
-              //               width: 30,
-              //               height: 30,
-              //             ),
-              //           ),
-              //         ],
-              //       ),
-              //     );
-              //   },
-              // ),
-            ],
-          ),
-          const SizedBox(height: 40),
         ],
       ),
     );
@@ -223,7 +167,6 @@ class UserHomeView extends StatelessWidget {
               return Container(
                 width: 210,
                 decoration: BoxDecoration(
-                  // ignore: deprecated_member_use
                   color: stats[index].boxColor.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -241,46 +184,8 @@ class UserHomeView extends StatelessWidget {
                             fontSize: 16,
                           ),
                         ),
-                        Text(
-                          '',
-                          //'${diets[index].level} | ${diets[index].duration} | ${diets[index].calorie}',
-                          style: const TextStyle(
-                            color: Color(0xff7B6F72),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
                       ],
                     ),
-                    // Container(
-                    //   height: 45,
-                    //   width: 130,
-                    //   decoration: BoxDecoration(
-                    //     gradient: LinearGradient(
-                    //       colors: [
-                    //         diets[index].viewIsSelected
-                    //             ? const Color(0xff9DCEFF)
-                    //             : Colors.transparent,
-                    //         diets[index].viewIsSelected
-                    //             ? const Color(0xff92A3FD)
-                    //             : Colors.transparent,
-                    //       ],
-                    //     ),
-                    //     borderRadius: BorderRadius.circular(50),
-                    //   ),
-                    //   child: Center(
-                    //     child: Text(
-                    //       'View',
-                    //       style: TextStyle(
-                    //         color: diets[index].viewIsSelected
-                    //             ? Colors.white
-                    //             : const Color(0xffC58BF2),
-                    //         fontWeight: FontWeight.w600,
-                    //         fontSize: 14,
-                    //       ),
-                    //     ),
-                    //   ),
-                    // ),
                   ],
                 ),
               );
@@ -313,46 +218,49 @@ class UserHomeView extends StatelessWidget {
         const SizedBox(height: 15),
         SizedBox(
           height: 120,
-          child: ListView.separated(
-            itemCount: categories.length,
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            separatorBuilder: (context, index) => const SizedBox(width: 25),
-            itemBuilder: (context, index) {
-              return Container(
-                width: 100,
-                decoration: BoxDecoration(
-                  color: categories[index].boxColor.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(16),
+          child: categories.isEmpty
+              ? const Center(child: Text("No subjects found"))
+              : ListView.separated(
+                  itemCount: categories.length,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 25),
+                  itemBuilder: (context, index) {
+                    return Container(
+                      width: 100,
+                      decoration: BoxDecoration(
+                        color: categories[index].boxColor.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: SvgPicture.asset(categories[index].iconPath),
+                            ),
+                          ),
+                          Text(
+                            categories[index].name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w400,
+                              color: Colors.black,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: SvgPicture.asset(categories[index].iconPath),
-                      ),
-                    ),
-                    Text(
-                      categories[index].name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w400,
-                        color: Colors.black,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
         ),
       ],
     );
@@ -380,26 +288,6 @@ class UserHomeView extends StatelessWidget {
           prefixIcon: Padding(
             padding: const EdgeInsets.all(12),
             child: SvgPicture.asset('assets/icons/Search.svg'),
-          ),
-          suffixIcon: SizedBox(
-            width: 100,
-            child: IntrinsicHeight(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  const VerticalDivider(
-                    color: Colors.black,
-                    indent: 10,
-                    endIndent: 10,
-                    thickness: 0.1,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: SvgPicture.asset('assets/icons/Filter.svg'),
-                  ),
-                ],
-              ),
-            ),
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(15),
