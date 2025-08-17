@@ -1,3 +1,4 @@
+// firebase_cloud_storage.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'cloud_user.dart';
 import 'cloud_storage_constants.dart';
@@ -9,6 +10,7 @@ class FirebaseCloudStorage {
   final users = FirebaseFirestore.instance.collection('users');
   final subjects = FirebaseFirestore.instance.collection('subjects');
   final topics = FirebaseFirestore.instance.collection('topics');
+  final concepts = FirebaseFirestore.instance.collection('concepts');
   final questions = FirebaseFirestore.instance.collection('questions');
 
   // ------------------------ USERS ------------------------
@@ -32,7 +34,8 @@ class FirebaseCloudStorage {
         userStrengthFieldName: {},
         userQuizzesTakenFieldName: 0,
         userLastActiveFieldName: Timestamp.now(),
-        userTopicsIntroducedFieldName: [],
+        userSubjectsIntroducedFieldName: [],
+        userTopicsInProgressFieldName: {},
       });
     } catch (e) {
       throw CouldNotCreateUserException();
@@ -42,13 +45,13 @@ class FirebaseCloudStorage {
   Future<void> completeInitialSetup({
     required String uid,
     required String name,
-    required List<String> topicsIntroduced,
+    required List<String> subjectsIntroduced,
   }) async {
     try {
       await users.doc(uid).update({
         userNameFieldName: name,
         userInitialSetupDoneFieldName: true,
-        userTopicsIntroducedFieldName: topicsIntroduced,
+        userSubjectsIntroducedFieldName: subjectsIntroduced,
         userLastActiveFieldName: Timestamp.now(),
       });
     } catch (e) {
@@ -61,12 +64,14 @@ class FirebaseCloudStorage {
     required int newStreak,
     required int newQuizzesTaken,
     required Map<String, dynamic> newStrength,
+    required Map<String, String> newTopicsInProgress, // {topicId: status}
   }) async {
     try {
       await users.doc(uid).update({
         userStreakFieldName: newStreak,
         userQuizzesTakenFieldName: newQuizzesTaken,
         userStrengthFieldName: newStrength,
+        userTopicsInProgressFieldName: newTopicsInProgress,
         userLastActiveFieldName: Timestamp.now(),
       });
     } catch (e) {
@@ -76,14 +81,25 @@ class FirebaseCloudStorage {
 
   // ------------------------ SUBJECTS ------------------------
 
-  Future<void> addSubject(String name) async {
-    await subjects.add({'name': name});
+  Future<void> addSubject(String name, {String description = ''}) async {
+    try {
+      await subjects.add({
+        subjectNameFieldName: name,
+        subjectDescriptionFieldName: description,
+      });
+    } catch (e) {
+      rethrow;
+    }
   }
 
   Future<List<Map<String, dynamic>>> getSubjects() async {
     final snapshot = await subjects.get();
     return snapshot.docs
-        .map((doc) => {'id': doc.id, 'name': doc['name']})
+        .map((doc) => {
+              'id': doc.id,
+              'name': doc.data()[subjectNameFieldName],
+              'description': doc.data()[subjectDescriptionFieldName] ?? '',
+            })
         .toList();
   }
 
@@ -92,177 +108,254 @@ class FirebaseCloudStorage {
   Future<String> addTopic({
     required String name,
     required String subjectId,
-    bool isUnlockedByDefault = false,
-    int difficulty = 1,
     List<String> prerequisites = const [],
+    int order = 0,
   }) async {
-    final doc = await _db.collection('topics').add({
-      'name': name,
-      'subjectId': subjectId,
-      'isUnlockedByDefault': isUnlockedByDefault,
-      'difficulty': difficulty,
-      'prerequisites': prerequisites,
+    final doc = await topics.add({
+      topicNameFieldName: name,
+      topicSubjectIdFieldName: subjectId,
+      topicPrerequisitesFieldName: prerequisites,
+      topicOrderFieldName: order,
     });
     return doc.id;
   }
 
   Future<List<Map<String, dynamic>>> getTopics(String subjectId) async {
-    final snapshot = await _db
-        .collection('topics')
-        .where('subjectId', isEqualTo: subjectId)
-        .get();
-    return snapshot.docs.map((doc) => {
-          'id': doc.id,
-          'name': doc['name'],
-        }).toList();
+    final snapshot =
+        await topics.where(topicSubjectIdFieldName, isEqualTo: subjectId).get();
+    return snapshot.docs
+        .map((doc) => {
+              'id': doc.id,
+              'name': doc.data()[topicNameFieldName],
+              'order': doc.data()[topicOrderFieldName] ?? 0,
+            })
+        .toList();
   }
 
-  Future<void> addTopicReferenceToSubject(String subjectId, String topicId) async {
-    final doc = subjects.doc(subjectId);
+  // ------------------------ CONCEPTS ------------------------
 
-    await _db.runTransaction((txn) async {
-      final snapshot = await txn.get(doc);
-      final existingTopics = List<String>.from(snapshot.data()?['topics'] ?? []);
-      if (!existingTopics.contains(topicId)) {
-        existingTopics.add(topicId);
-        txn.update(doc, {'topics': existingTopics});
-      }
+  Future<String> addConcept({
+    required String name,
+    required String subjectId,
+    required String topicId,
+  }) async {
+    final doc = await concepts.add({
+      conceptNameFieldName: name,
+      conceptSubjectIdFieldName: subjectId,
+      conceptTopicIdFieldName: topicId,
+      conceptLastSeenFieldName: null,
     });
+    return doc.id;
   }
 
-  // ------------------------ QUESTIONS ------------------------
-  // Helper to apply common fields and add to Firestore
+  Future<List<Map<String, dynamic>>> getConcepts(String topicId) async {
+    final snapshot =
+        await concepts.where(conceptTopicIdFieldName, isEqualTo: topicId).get();
+    return snapshot.docs
+        .map((doc) => {
+              'id': doc.id,
+              'name': doc.data()[conceptNameFieldName],
+            })
+        .toList();
+  }
+
+  // ------------------------ QUESTIONS (core add helper) ------------------------
+
   Future<void> _addQuestion(Map<String, dynamic> data) async {
-    data['createdAt'] = FieldValue.serverTimestamp();
+    data[questionCreatedAtField] = FieldValue.serverTimestamp();
     await questions.add(data);
   }
 
-  /// MCQ: options + correctAnswer (e.g., 'A' | 'B' | 'C' | 'D')
+  Future<void> addQuestion({
+    required String type,
+    required String subjectId,
+    required String topicId,
+    String? conceptId,
+    required String questionText,
+    String? hintText,
+    dynamic correctAnswer,
+    List<String>? options,
+    List<String>? images,
+    List<Map<String, String>>? matchPair,
+    Map<String, int>? correctCoordinates,
+    int versionNumber = 1,
+  }) async {
+    final Map<String, dynamic> payload = {
+      questionTypeField: type,
+      questionSubjectIdField: subjectId,
+      questionTopicIdField: topicId,
+      questionTextField: questionText,
+      questionHintTextField: hintText ?? '',
+      questionCorrectAnswerField: correctAnswer,
+      questionVersionNumberField: versionNumber,
+    };
+
+    if (conceptId != null) payload[questionConceptIdField] = conceptId;
+    if (options != null) payload[questionOptionsField] = options;
+    if (images != null) payload[questionImageField] = images;
+    if (matchPair != null) payload[questionMatchPairField] = matchPair;
+    if (correctCoordinates != null) {
+      payload[questionCorrectCoordinatesField] = correctCoordinates;
+    }
+
+    await _addQuestion(payload);
+  }
+
+  // ------------------------ QUESTIONS (admin wrappers) ------------------------
+
   Future<void> addMCQQuestion({
     required String subjectId,
     required String topicId,
+    String? conceptId,
     required String questionText,
     String? hintText,
     required List<String> options,
     required String correctAnswer,
+    int versionNumber = 1,
   }) async {
-    await _addQuestion({
-      'type': 'mcq',
-      'subjectId': subjectId,
-      'topicId': topicId,
-      'questionText': questionText,
-      'hint': hintText ?? '',
-      'options': options,
-      'correctAnswer': correctAnswer, // stored as letter or value
-    });
+    String normalizedCorrect;
+    final letter = correctAnswer.trim().toUpperCase();
+    if (letter.length == 1 &&
+        letter.codeUnitAt(0) >= 65 &&
+        letter.codeUnitAt(0) < 65 + options.length) {
+      final idx = letter.codeUnitAt(0) - 65;
+      normalizedCorrect = options[idx];
+    } else {
+      normalizedCorrect = correctAnswer;
+    }
+
+    await addQuestion(
+      type: 'mcq',
+      subjectId: subjectId,
+      topicId: topicId,
+      conceptId: conceptId,
+      questionText: questionText,
+      hintText: hintText,
+      correctAnswer: normalizedCorrect,
+      options: options,
+      versionNumber: versionNumber,
+    );
   }
 
-  /// Fill-up: one or more acceptable answers (case-normalize in app if needed)
   Future<void> addFillupQuestion({
     required String subjectId,
     required String topicId,
+    String? conceptId,
     required String questionText,
     String? hintText,
     required List<String> correctAnswers,
+    int versionNumber = 1,
   }) async {
-    await _addQuestion({
-      'type': 'fillup',
-      'subjectId': subjectId,
-      'topicId': topicId,
-      'questionText': questionText,
-      'hint': hintText ?? '',
-      // CloudQuestion.correctAnswer is dynamic, so a List<String> is fine
-      'correctAnswer': correctAnswers,
-    });
+    await addQuestion(
+      type: 'fillup',
+      subjectId: subjectId,
+      topicId: topicId,
+      conceptId: conceptId,
+      questionText: questionText,
+      hintText: hintText,
+      correctAnswer: correctAnswers,
+      versionNumber: versionNumber,
+    );
   }
 
-  /// Ordering: store phrases + the correct order (same as phrases initially)
   Future<void> addOrderingQuestion({
     required String subjectId,
     required String topicId,
+    String? conceptId,
     required String questionText,
     String? hintText,
     required List<String> phrases,
+    int versionNumber = 1,
   }) async {
-    await _addQuestion({
-      'type': 'ordering',
-      'subjectId': subjectId,
-      'topicId': topicId,
-      'questionText': questionText,
-      'hint': hintText ?? '',
-      'phrases': phrases,
-      'correctAnswer': phrases, // use dynamic field for the target order
-    });
+    await addQuestion(
+      type: 'ordering',
+      subjectId: subjectId,
+      topicId: topicId,
+      conceptId: conceptId,
+      questionText: questionText,
+      hintText: hintText,
+      correctAnswer: phrases,
+      versionNumber: versionNumber,
+      options: phrases,
+    );
   }
 
-  /// Match Pairs: list of {left, right}
   Future<void> addMatchPairsQuestion({
     required String subjectId,
     required String topicId,
+    String? conceptId,
     required String questionText,
     String? hintText,
     required List<Map<String, String>> pairs,
+    int versionNumber = 1,
   }) async {
-    await _addQuestion({
-      'type': 'match_pairs',
-      'subjectId': subjectId,
-      'topicId': topicId,
-      'questionText': questionText,
-      'hint': hintText ?? '',
-      // Match CloudQuestion field name:
-      'matchPairs': pairs,
-    });
+    await addQuestion(
+      type: 'match_pairs',
+      subjectId: subjectId,
+      topicId: topicId,
+      conceptId: conceptId,
+      questionText: questionText,
+      hintText: hintText,
+      matchPair: pairs,
+      versionNumber: versionNumber,
+    );
   }
 
-  /// Drag & Drop: mapping from draggable -> target
-  /// We also store the list of draggables and boxes for quick rendering.
   Future<void> addDragDropQuestion({
     required String subjectId,
     required String topicId,
+    String? conceptId,
     required String questionText,
     String? hintText,
     required Map<String, String> mapping,
+    int versionNumber = 1,
   }) async {
     final draggables = mapping.keys.toList();
-    final boxes = mapping.values.toSet().toList(); // unique targets
+    final boxes = mapping.values.toSet().toList();
 
-    await _addQuestion({
-      'type': 'drag_drop',
-      'subjectId': subjectId,
-      'topicId': topicId,
-      'questionText': questionText,
-      'hint': hintText ?? '',
+    final payload = {
+      questionTypeField: 'drag_drop',
+      questionSubjectIdField: subjectId,
+      questionTopicIdField: topicId,
+      if (conceptId != null) questionConceptIdField: conceptId,
+      questionTextField: questionText,
+      questionHintTextField: hintText ?? '',
+      questionCorrectAnswerField: mapping,
       'draggables': draggables,
       'boxes': boxes,
-      // Put the ground truth mapping in the dynamic slot:
-      'correctAnswer': mapping,
-    });
+      questionVersionNumberField: versionNumber,
+    };
+    await _addQuestion(payload);
   }
 
-  /// Tap on Image: single correct point (x,y); extend to multiple later
   Future<void> addTapImageQuestion({
     required String subjectId,
     required String topicId,
+    String? conceptId,
     required String questionText,
     String? hintText,
     String? imageUrl,
     required int x,
     required int y,
+    int versionNumber = 1,
   }) async {
-    await _addQuestion({
-      'type': 'tap_image',
-      'subjectId': subjectId,
-      'topicId': topicId,
-      'questionText': questionText,
-      'hint': hintText ?? '',
-      if (imageUrl != null) 'imageUrl': imageUrl,
-      // Match CloudQuestion field name:
-      'correctTapPosition': {'x': x, 'y': y},
-    });
+    final payload = {
+      questionTypeField: 'tap_image',
+      questionSubjectIdField: subjectId,
+      questionTopicIdField: topicId,
+      if (conceptId != null) questionConceptIdField: conceptId,
+      questionTextField: questionText,
+      questionHintTextField: hintText ?? '',
+      if (imageUrl != null) questionImageField: [imageUrl],
+      questionCorrectCoordinatesField: {'x': x, 'y': y},
+      questionVersionNumberField: versionNumber,
+    };
+    await _addQuestion(payload);
   }
 
   // ------------------------ Singleton ------------------------
-  static final FirebaseCloudStorage _shared = FirebaseCloudStorage._sharedInstance();
+  static final FirebaseCloudStorage _shared =
+      FirebaseCloudStorage._sharedInstance();
   FirebaseCloudStorage._sharedInstance();
   factory FirebaseCloudStorage() => _shared;
 }

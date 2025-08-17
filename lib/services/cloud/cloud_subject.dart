@@ -6,16 +6,16 @@ import 'cloud_storage_constants.dart';
 class CloudSubject {
   final String documentId;
   final String name;
-  final List<String> topics;
+  final String description;
 
   const CloudSubject({
     required this.documentId,
     required this.name,
-    required this.topics,
+    required this.description,
   });
 
   CloudSubject.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot)
       : documentId = snapshot.id,
         name = snapshot.data()?[subjectNameFieldName] ?? '',
-        topics = List<String>.from(snapshot.data()?[subjectTopicsFieldName] ?? []);
+        description = snapshot.data()?[subjectDescriptionFieldName] ?? '';
 }

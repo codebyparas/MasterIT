@@ -84,7 +84,7 @@ class _InitialQuizViewState extends State<InitialQuizView> {
                     await FirebaseCloudStorage().completeInitialSetup(
                       uid: user.id,
                       name: widget.username,
-                      topicsIntroduced: [widget.subject],
+                      subjectsIntroduced: [widget.subject],
                     );
                     if (!mounted) return;
                     Navigator.of(context).pushNamedAndRemoveUntil(userHomeRoute, (_) => false);

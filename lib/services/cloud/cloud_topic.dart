@@ -5,26 +5,23 @@ import 'cloud_storage_constants.dart';
 @immutable
 class CloudTopic {
   final String documentId;
+  final String subjectId;
   final String name;
-  final String subject;
-  final bool isUnlockedByDefault;
-  final int difficulty;
   final List<String> prerequisites;
+  final int order;
 
   const CloudTopic({
     required this.documentId,
+    required this.subjectId,
     required this.name,
-    required this.subject,
-    required this.isUnlockedByDefault,
-    required this.difficulty,
     required this.prerequisites,
+    required this.order,
   });
 
   CloudTopic.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot)
       : documentId = snapshot.id,
+        subjectId = snapshot.data()?[topicSubjectIdFieldName] ?? '',
         name = snapshot.data()?[topicNameFieldName] ?? '',
-        subject = snapshot.data()?[topicSubjectFieldName] ?? '',
-        isUnlockedByDefault = snapshot.data()?[topicIsUnlockedFieldName] ?? false,
-        difficulty = snapshot.data()?[topicDifficultyFieldName] ?? 1,
-        prerequisites = List<String>.from(snapshot.data()?[topicPrerequisitesFieldName] ?? []);
+        prerequisites = List<String>.from(snapshot.data()?[topicPrerequisitesFieldName] ?? []),
+        order = snapshot.data()?[topicOrderFieldName] ?? 0;
 }

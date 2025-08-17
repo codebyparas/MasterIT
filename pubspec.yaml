@@ -40,6 +40,8 @@ dependencies:
   cloud_firestore: ^5.6.12
   image_picker: ^1.1.2
   firebase_storage: ^12.4.10
+  supabase_flutter: ^2.0.0
+  uuid: ^3.0.6
 
 dev_dependencies:
   flutter_test:

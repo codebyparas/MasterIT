@@ -9,10 +9,11 @@ class CloudUser {
   final String email;
   final bool initialSetupDone;
   final int streak;
-  final Map<String, dynamic> strength;
   final int quizzesTaken;
-  final Timestamp lastActive;
-  final List<dynamic> topicsIntroduced;
+  final DateTime? lastActive;
+  final Map<String, dynamic> strength; // topicId -> strength value
+  final List<String> subjectsIntroduced;
+  final Map<String, String> topicsInProgress; // topicId -> status
 
   const CloudUser({
     required this.documentId,
@@ -20,10 +21,11 @@ class CloudUser {
     required this.email,
     required this.initialSetupDone,
     required this.streak,
-    required this.strength,
     required this.quizzesTaken,
     required this.lastActive,
-    required this.topicsIntroduced,
+    required this.strength,
+    required this.subjectsIntroduced,
+    required this.topicsInProgress,
   });
 
   CloudUser.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot)
@@ -32,8 +34,9 @@ class CloudUser {
         email = snapshot.data()?[userEmailFieldName] ?? '',
         initialSetupDone = snapshot.data()?[userInitialSetupDoneFieldName] ?? false,
         streak = snapshot.data()?[userStreakFieldName] ?? 0,
-        strength = snapshot.data()?[userStrengthFieldName] ?? {},
         quizzesTaken = snapshot.data()?[userQuizzesTakenFieldName] ?? 0,
-        lastActive = snapshot.data()?[userLastActiveFieldName] ?? Timestamp.now(),
-        topicsIntroduced = snapshot.data()?[userTopicsIntroducedFieldName] ?? [];
+        lastActive = (snapshot.data()?[userLastActiveFieldName] as Timestamp?)?.toDate(),
+        strength = Map<String, dynamic>.from(snapshot.data()?[userStrengthFieldName] ?? {}),
+        subjectsIntroduced = List<String>.from(snapshot.data()?[userSubjectsIntroducedFieldName] ?? []),
+        topicsInProgress = Map<String, String>.from(snapshot.data()?[userTopicsInProgressFieldName] ?? {});
 }

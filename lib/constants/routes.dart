@@ -9,3 +9,4 @@ const adminPanelRoute='/admin-panel/';
 
 const mapQuesRoute='/map-ques/';
 const dragQuesRoute='/drag-ques/';
+const uploadPhotoRoute='/upload-photo/';

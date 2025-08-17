@@ -1,35 +1,46 @@
-// User fields
+// ------------------------ USERS ------------------------
+const userIdFieldName = 'id';
 const userNameFieldName = 'name';
 const userEmailFieldName = 'email';
 const userInitialSetupDoneFieldName = 'initialSetupDone';
-const userStreakFieldName = 'streak';
-const userStrengthFieldName = 'strength';
-const userQuizzesTakenFieldName = 'quizzesTaken';
 const userLastActiveFieldName = 'lastActive';
-const userTopicsIntroducedFieldName = 'topicsIntroduced';
+const userQuizzesTakenFieldName = 'quizzesTaken';
+const userStreakFieldName = 'streak';
+const userStrengthFieldName = 'strength'; // Map<String, dynamic>
+const userSubjectsIntroducedFieldName = 'subjectsIntroduced'; // List<String>
+const userTopicsInProgressFieldName = 'topicsInProgress'; // Map<String, String> {topicId: status}
 
-// Subject fields
+// ------------------------ SUBJECTS ------------------------
+const subjectIdFieldName = 'id';
 const subjectNameFieldName = 'name';
-const subjectTopicsFieldName = 'topics';
+const subjectDescriptionFieldName = 'description';
 
-// Topic fields
+// ------------------------ TOPICS ------------------------
+const topicIdFieldName = 'id';
 const topicNameFieldName = 'name';
-const topicSubjectFieldName = 'subject';
-const topicIsUnlockedFieldName = 'isUnlockedByDefault';
-const topicDifficultyFieldName = 'difficulty';
-const topicPrerequisitesFieldName = 'prerequisites';
+const topicSubjectIdFieldName = 'subjectId';
+const topicPrerequisitesFieldName = 'prerequisites'; // List<String>
+const topicOrderFieldName = 'order';
 
-// Question fields (all formats)
+// ------------------------ CONCEPTS ------------------------
+const conceptIdFieldName = 'id';
+const conceptNameFieldName = 'name';
+const conceptSubjectIdFieldName = 'subjectId';
+const conceptTopicIdFieldName = 'topicId';
+const conceptLastSeenFieldName = 'lastSeen';
+
+// ------------------------ QUESTIONS ------------------------
 const questionIdField = 'id';
 const questionTypeField = 'type';
+const questionSubjectIdField = 'subjectId';
+const questionTopicIdField = 'topicId';
+const questionConceptIdField = 'conceptId';
 const questionTextField = 'questionText';
-const questionImageField = 'image'; // URL string
 const questionHintTextField = 'hintText';
-const questionTopicField = 'topic';
-const questionSubjectField = 'subject';
-const questionOptionsField = 'options'; // MCQ
-const questionCorrectAnswerField = 'correctAnswer';
-const questionCorrectTapPositionField = 'correctTapPosition'; // Map with x and y
-const questionMatchPairsField = 'matchPairs'; // List of maps
-const questionBoxesField = 'boxes'; // For drag/drop
-const questionDraggablesField = 'draggables'; // For drag/drop
+const questionCorrectAnswerField = 'correctAnswer'; // dynamic
+const questionOptionsField = 'options'; // List<String>
+const questionImageField = 'images'; // List<String> or single URL
+const questionMatchPairField = 'matchPair'; // List<Map<String,String>>
+const questionCorrectCoordinatesField = 'correctCoordinates'; // {x: int, y: int}
+const questionVersionNumberField = 'versionNumber';
+const questionCreatedAtField = 'createdAt';
