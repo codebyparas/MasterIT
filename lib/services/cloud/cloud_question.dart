@@ -5,19 +5,17 @@ import 'cloud_storage_constants.dart';
 @immutable
 class CloudQuestion {
   final String documentId;
-  final String type; // 'mcq', 'fill', 'tap', etc.
+  final String type; // mcq, fillup, match_pairs, etc.
   final String text;
-  final String? imageUrl;
   final String? hint;
   final String topic;
   final String subject;
-
-  final List<String>? options; // MCQ
-  final dynamic correctAnswer; // string, list, etc.
-  final Map<String, dynamic>? correctTapPosition; // {'x': 120, 'y': 340}
+  final List<String>? options;       // mcq
+  final dynamic correctAnswer;       // mcq: String, fillup: String/List
   final List<Map<String, String>>? matchPairs;
-  final List<String>? boxes;
-  final List<String>? draggables;
+  final Map<String, dynamic>? tapAreas; // x,y,radius/box
+  final List<String>? orderingPhrases;
+  final Map<String, String>? dragMapping; // {draggable: target}
 
   const CloudQuestion({
     required this.documentId,
@@ -25,30 +23,30 @@ class CloudQuestion {
     required this.text,
     required this.topic,
     required this.subject,
-    this.imageUrl,
     this.hint,
     this.options,
     this.correctAnswer,
-    this.correctTapPosition,
     this.matchPairs,
-    this.boxes,
-    this.draggables,
+    this.tapAreas,
+    this.orderingPhrases,
+    this.dragMapping,
   });
 
   CloudQuestion.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot)
       : documentId = snapshot.id,
         type = snapshot.data()?[questionTypeField] ?? '',
         text = snapshot.data()?[questionTextField] ?? '',
-        imageUrl = snapshot.data()?[questionImageField],
         hint = snapshot.data()?[questionHintTextField],
-        topic = snapshot.data()?[questionTopicField] ?? '',
-        subject = snapshot.data()?[questionSubjectField] ?? '',
-        options = (snapshot.data()?[questionOptionsField] as List?)?.cast<String>(),
+        topic = snapshot.data()?['topicId'] ?? '',
+        subject = snapshot.data()?['subjectId'] ?? '',
+        options = (snapshot.data()?['options'] as List?)?.cast<String>(),
         correctAnswer = snapshot.data()?[questionCorrectAnswerField],
-        correctTapPosition = snapshot.data()?[questionCorrectTapPositionField],
-        matchPairs = (snapshot.data()?[questionMatchPairsField] as List?)
+        matchPairs = (snapshot.data()?['pairs'] as List?)
             ?.map((e) => Map<String, String>.from(e))
             .toList(),
-        boxes = (snapshot.data()?[questionBoxesField] as List?)?.cast<String>(),
-        draggables = (snapshot.data()?[questionDraggablesField] as List?)?.cast<String>();
+        tapAreas = snapshot.data()?['correctAreas'],
+        orderingPhrases = (snapshot.data()?['phrases'] as List?)?.cast<String>(),
+        dragMapping = snapshot.data()?['correctMapping'] != null
+            ? Map<String, String>.from(snapshot.data()?['correctMapping'])
+            : null;
 }
