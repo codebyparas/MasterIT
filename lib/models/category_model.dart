@@ -35,25 +35,25 @@ class CategoryModel {
       case "biology":
         return CategoryModel(
           name: "Biology",
-          iconPath: "assets/icons/biology.svg", // add correct icon
+          iconPath: "assets/icons/java.svg", // add correct icon
           boxColor: const Color(0xffEEA4CE),
         );
       case "history":
         return CategoryModel(
           name: "History",
-          iconPath: "assets/icons/history.svg", // add correct icon
+          iconPath: "assets/icons/java.svg", // add correct icon
           boxColor: const Color(0xff9DCEFF),
         );
       case "vocabulary":
         return CategoryModel(
           name: "Vocabulary",
-          iconPath: "assets/icons/vocabulary.svg", // add correct icon
+          iconPath: "assets/icons/java.svg", // add correct icon
           boxColor: const Color(0xffEEA4CE),
         );
       default:
         return CategoryModel(
           name: subject,
-          iconPath: "assets/icons/default.svg",
+          iconPath: "assets/icons/java.svg",
           boxColor: Colors.grey,
         );
     }

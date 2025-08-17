@@ -21,16 +21,60 @@ class _UserHomeViewState extends State<UserHomeView> {
   List<StatsModel> stats = [];
   List<AchievementsModel> achievments = [];
 
+  String userName = "";
+  int streak = 0;
+  int quizzesTaken = 0;
+
   @override
   void initState() {
     super.initState();
     _getInitialInfo();
+    _loadUserData();
     _loadUserSubjects();
   }
 
   void _getInitialInfo() {
-    stats = StatsModel.getDiets();
     achievments = AchievementsModel.getPopularDiets();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      if (userDoc.exists) {
+        setState(() {
+          userName = userDoc['name'] ?? "User";
+          streak = userDoc['streak'] ?? 0;
+          quizzesTaken = userDoc['quizzesTaken'] ?? 0;
+
+          // Build stats from Firestore values
+          stats = [
+            StatsModel(
+              name: "Streak: $streak",
+              iconPath: 'assets/icons/java.svg',
+              level: '',
+              duration: '',
+              calorie: '',
+              viewIsSelected: true,
+              boxColor: const Color(0xff9DCEFF),
+            ),
+            StatsModel(
+              name: "Quizzes Taken: $quizzesTaken",
+              iconPath: 'assets/icons/java.svg',
+              level: '',
+              duration: '',
+              calorie: '',
+              viewIsSelected: false,
+              boxColor: const Color(0xffEEA4CE),
+            ),
+          ];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading user data: $e");
+    }
   }
 
   Future<void> _loadUserSubjects() async {
@@ -42,7 +86,6 @@ class _UserHomeViewState extends State<UserHomeView> {
       if (userDoc.exists) {
         List<dynamic> topics = userDoc['topicsIntroduced'] ?? [];
 
-        // Map each subject to a CategoryModel
         List<CategoryModel> loaded = topics.map((topic) {
           return CategoryModel.fromSubject(topic.toString());
         }).toList();
@@ -123,11 +166,11 @@ class _UserHomeViewState extends State<UserHomeView> {
         children: [
           _searchField(),
           const SizedBox(height: 40),
-          const Padding(
-            padding: EdgeInsets.only(left: 20),
+          Padding(
+            padding: const EdgeInsets.only(left: 20),
             child: Text(
-              'Select a subject to master...',
-              style: TextStyle(
+              "Welcome, $userName 👋",
+              style: const TextStyle(
                 color: Colors.black,
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
@@ -167,13 +210,26 @@ class _UserHomeViewState extends State<UserHomeView> {
               return Container(
                 width: 210,
                 decoration: BoxDecoration(
+                  // ignore: deprecated_member_use
                   color: stats[index].boxColor.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    SvgPicture.asset(stats[index].iconPath),
+                    // 👇 Styled same as in categories
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: SvgPicture.asset(stats[index].iconPath),
+                      ),
+                    ),
                     Column(
                       children: [
                         Text(
