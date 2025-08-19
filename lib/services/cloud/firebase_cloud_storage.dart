@@ -494,9 +494,8 @@ class FirebaseCloudStorage {
     String? conceptId,
     required String questionText,
     String? hintText,
-    String? imageUrl,
-    required int x,
-    required int y,
+    List<String>? images,
+    required Map<String, dynamic> correctCoordinates, // now includes width/height
     int versionNumber = 1,
   }) async {
     final payload = {
@@ -506,8 +505,8 @@ class FirebaseCloudStorage {
       if (conceptId != null) questionConceptIdField: conceptId,
       questionTextField: questionText,
       questionHintTextField: hintText ?? '',
-      if (imageUrl != null) questionImageField: [imageUrl],
-      questionCorrectCoordinatesField: {'x': x, 'y': y},
+      if (images != null) questionImageField: images,
+      questionCorrectCoordinatesField: correctCoordinates, // e.g. {'x':0.12,'y':0.3,'width':0.2,'height':0.1}
       questionVersionNumberField: versionNumber,
     };
     await _addQuestion(payload);

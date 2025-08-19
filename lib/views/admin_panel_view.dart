@@ -1,5 +1,7 @@
 // admin_panel_view.dart
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,6 +10,9 @@ import 'package:learningdart/services/cloud/firebase_cloud_storage.dart';
 import 'package:learningdart/utilities/logout_helper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+
+// Adjust the path below to where your rectangle_selector.dart lives in your project.
+import 'package:learningdart/utilities/rectangle_selector.dart';
 
 class SupabaseConfig {
   static const String supabaseUrl = 'https://wqnxdcwwupeyiedbzfci.supabase.co';
@@ -37,7 +42,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     'Drag & Drop',
     'Tap on Image',
     'Ordering',
-  ]; // "Match Pairs" removed from global dropdown per request.
+  ];
 
   List<Map<String, dynamic>> subjects = [];
   List<Map<String, dynamic>> topics = [];
@@ -49,7 +54,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   // Common fields
   final subjectNameController = TextEditingController();
   final topicNameController = TextEditingController();
-  final conceptNameController = TextEditingController(); // for adding concept
+  final conceptNameController = TextEditingController();
   final questionTextController = TextEditingController();
   final hintTextController = TextEditingController();
 
@@ -58,7 +63,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   final optionB = TextEditingController();
   final optionC = TextEditingController();
   final optionD = TextEditingController();
-  final correctAnswer = TextEditingController(); // A/B/C/D or full text
+  final correctAnswer = TextEditingController();
 
   // MCQ match-pairs inside MCQ (optional)
   final mcqLeftPairController = TextEditingController();
@@ -69,19 +74,24 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   final fillupAnswer = TextEditingController();
 
   // Ordering
-  final orderingItems = TextEditingController(); // comma-separated items
+  final orderingItems = TextEditingController();
 
-  // Drag & Drop (support text or images)
+  // Drag & Drop
   final dragItemController = TextEditingController();
   final dragTargetController = TextEditingController();
-  final List<Map<String, dynamic>> dragMappings = []; // mapping entries
+  final List<Map<String, dynamic>> dragMappings = [];
   XFile? _tempDraggableImage;
   XFile? _tempTargetImage;
 
-  // Tap on Image
+  // Tap on Image - allow manual or drawn rectangle
   final tapXController = TextEditingController();
   final tapYController = TextEditingController();
+  final tapWController = TextEditingController();
+  final tapHController = TextEditingController();
   final List<Map<String, int>> tapPoints = [];
+
+  // Rectangle from drawing (pixel coordinates)
+  Map<String, int>? _tapRectPixels;
 
   // Question-level images
   List<XFile> _pickedImages = [];
@@ -120,6 +130,8 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
     tapXController.dispose();
     tapYController.dispose();
+    tapWController.dispose();
+    tapHController.dispose();
 
     super.dispose();
   }
@@ -156,9 +168,9 @@ class _AdminPanelViewState extends State<AdminPanelView> {
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Image pick error: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Image pick error: $e')),
+      );
     }
   }
 
@@ -208,14 +220,11 @@ class _AdminPanelViewState extends State<AdminPanelView> {
           final destination = 'questions/$fname';
           final f = File(file.path);
 
-          // Upload - adjust if your supabase client version requires different API
           await supabase.storage.from(bucket).upload(destination, f);
 
-          // Get public url (many versions return String directly)
           final publicRes = supabase.storage.from(bucket).getPublicUrl(destination);
           String? url = publicRes;
-          if (url == null || url.isEmpty) {
-            // fallback construction
+          if (url.isEmpty) {
             url = '${SupabaseConfig.supabaseUrl}/storage/v1/object/public/$bucket/$destination';
           }
           result[file.path] = url;
@@ -240,9 +249,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
         (rightText.isEmpty && _tempTargetImage == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Provide text or select image for both draggable and target.',
-          ),
+          content: Text('Provide text or select image for both draggable and target.'),
         ),
       );
       return;
@@ -258,7 +265,6 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
     setState(() {
       dragMappings.add({'draggable': draggable, 'target': target});
-      // reset
       dragItemController.clear();
       dragTargetController.clear();
       _tempDraggableImage = null;
@@ -268,6 +274,81 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
   void _removeDragMapping(int idx) {
     setState(() => dragMappings.removeAt(idx));
+  }
+
+  // ---------------- Rectangle selector integration ----------------
+
+  Future<Size> _getImagePixelSize(String imagePath) async {
+    final bytes = await File(imagePath).readAsBytes();
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromList(bytes, (img) => completer.complete(img));
+    final img = await completer.future;
+    return Size(img.width.toDouble(), img.height.toDouble());
+  }
+
+  /// Open rectangle selector page and handle the normalized coordinates returned
+  Future<void> _openRectangleSelectorForImage(XFile imageFile) async {
+    try {
+      final result = await Navigator.of(context).push<Map<String, double>>(
+        MaterialPageRoute(
+          builder: (_) => RectangleSelectorPage(imagePath: imageFile.path),
+        ),
+      );
+
+      if (result == null) return;
+
+      // Rectangle selector returns Map<String, double> with keys: 'x', 'y', 'width', 'height'
+      // These are normalized coordinates (0.0 to 1.0) relative to the intrinsic image size
+      if (!result.containsKey('x') || !result.containsKey('y') || 
+          !result.containsKey('width') || !result.containsKey('height')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid rectangle data received.')),
+        );
+        return;
+      }
+
+      final normalizedX = result['x']!;
+      final normalizedY = result['y']!;
+      final normalizedWidth = result['width']!;
+      final normalizedHeight = result['height']!;
+
+      // Convert normalized coordinates to pixel coordinates
+      final imgSize = await _getImagePixelSize(imageFile.path);
+      final px = (normalizedX * imgSize.width).round();
+      final py = (normalizedY * imgSize.height).round();
+      final pw = (normalizedWidth * imgSize.width).round();
+      final ph = (normalizedHeight * imgSize.height).round();
+
+      // Clamp to image bounds
+      final clampedX = px.clamp(0, imgSize.width.toInt());
+      final clampedY = py.clamp(0, imgSize.height.toInt());
+      final maxWidth = imgSize.width.toInt() - clampedX;
+      final maxHeight = imgSize.height.toInt() - clampedY;
+      final clampedW = pw.clamp(1, maxWidth);
+      final clampedH = ph.clamp(1, maxHeight);
+
+      setState(() {
+        _tapRectPixels = {
+          'x': clampedX,
+          'y': clampedY,
+          'w': clampedW,
+          'h': clampedH,
+        };
+        tapXController.text = clampedX.toString();
+        tapYController.text = clampedY.toString();
+        tapWController.text = clampedW.toString();
+        tapHController.text = clampedH.toString();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rectangle selected and coordinates updated!')),
+      );
+    } catch (e) {
+      debugPrint('Rectangle selector error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Rectangle selection error: $e')),
+      );
+    }
   }
 
   // ---------------- Submit handler ----------------
@@ -282,9 +363,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
           {
             final subjectName = subjectNameController.text.trim();
             final exists = subjects.any(
-              (s) =>
-                  (s['name'] as String).toLowerCase() ==
-                  subjectName.toLowerCase(),
+              (s) => (s['name'] as String).toLowerCase() == subjectName.toLowerCase(),
             );
             if (exists) throw Exception("Subject already exists");
             await _manager.addSubject(subjectName);
@@ -298,9 +377,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
             }
             final topicName = topicNameController.text.trim();
             final duplicate = topics.any(
-              (t) =>
-                  (t['name'] as String).toLowerCase() ==
-                  topicName.toLowerCase(),
+              (t) => (t['name'] as String).toLowerCase() == topicName.toLowerCase(),
             );
             if (duplicate) throw Exception("Topic already exists.");
 
@@ -340,7 +417,6 @@ class _AdminPanelViewState extends State<AdminPanelView> {
             if (selectedSubjectId == null || selectedTopicId == null) {
               throw Exception("Please select subject and topic.");
             }
-            // NEW: make concept required for a question
             if (selectedConceptId == null) {
               throw Exception("Please select a concept (required).");
             }
@@ -350,7 +426,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                 ? null
                 : hintTextController.text.trim();
 
-            // Gather files to upload (question-level + drag mapping images)
+            // Gather files to upload
             final Set<XFile> allFiles = {..._pickedImages};
             for (final m in dragMappings) {
               final draggable = m['draggable'] as Map<String, dynamic>;
@@ -365,13 +441,11 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
             final fileToUrl = await _uploadFilesToSupabase(allFiles.toList());
 
-            // question-level image urls
             final List<String> questionImageUrls = _pickedImages
                 .map((f) => fileToUrl[f.path])
                 .whereType<String>()
                 .toList();
 
-            // concept id is REQUIRED for questions
             final conceptIdForQuestion = selectedConceptId!;
 
             switch (selectedQuestionType) {
@@ -391,10 +465,9 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     normalizedCorrect = options[letter.codeUnitAt(0) - 65];
                   }
 
-                  final List<Map<String, String>> matchPairsForMCQ =
-                      mcqMatchPairs
-                          .map((p) => {'left': p['left']!, 'right': p['right']!})
-                          .toList();
+                  final List<Map<String, String>> matchPairsForMCQ = mcqMatchPairs
+                      .map((p) => {'left': p['left']!, 'right': p['right']!})
+                      .toList();
 
                   await _manager.addQuestion(
                     type: 'mcq',
@@ -406,8 +479,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     correctAnswer: normalizedCorrect,
                     options: options,
                     images: questionImageUrls,
-                    matchPair:
-                        matchPairsForMCQ.isEmpty ? null : matchPairsForMCQ,
+                    matchPair: matchPairsForMCQ.isEmpty ? null : matchPairsForMCQ,
                   );
                   break;
                 }
@@ -435,8 +507,9 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                       .map((e) => e.trim())
                       .where((e) => e.isNotEmpty)
                       .toList();
-                  if (phrases.length < 2)
+                  if (phrases.length < 2) {
                     throw Exception("Add at least two items for ordering.");
+                  }
 
                   await _manager.addQuestion(
                     type: 'ordering',
@@ -454,8 +527,9 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
               case 'Drag & Drop':
                 {
-                  if (dragMappings.isEmpty)
+                  if (dragMappings.isEmpty) {
                     throw Exception("Add at least one draggable → target mapping.");
+                  }
 
                   final List<Map<String, dynamic>> mappingPayload = [];
                   final List<dynamic> draggablesFlattened = [];
@@ -468,8 +542,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     dynamic leftValue;
                     dynamic rightValue;
 
-                    if (draggable['type'] == 'image' &&
-                        draggable['file'] is XFile) {
+                    if (draggable['type'] == 'image' && draggable['file'] is XFile) {
                       leftValue = fileToUrl[(draggable['file'] as XFile).path];
                     } else {
                       leftValue = draggable['value'] as String;
@@ -494,7 +567,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
                   final Set<String> allImageUrls = {...questionImageUrls};
                   for (final url in fileToUrl.values) {
-                    if (url != null) allImageUrls.add(url);
+                    allImageUrls.add(url);
                   }
 
                   await _manager.addQuestion(
@@ -512,9 +585,37 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
               case 'Tap on Image':
                 {
-                  if (tapPoints.isEmpty)
-                    throw Exception("Add at least one (X, Y) coordinate.");
-                  final first = tapPoints.first;
+                  // Prefer the rectangle if provided
+                  Map<String, int>? coords;
+
+                  if (_tapRectPixels != null) {
+                    coords = _tapRectPixels;
+                  } else if (tapXController.text.isNotEmpty &&
+                      tapYController.text.isNotEmpty &&
+                      tapWController.text.isNotEmpty &&
+                      tapHController.text.isNotEmpty) {
+                    final px = int.tryParse(tapXController.text.trim());
+                    final py = int.tryParse(tapYController.text.trim());
+                    final pw = int.tryParse(tapWController.text.trim());
+                    final ph = int.tryParse(tapHController.text.trim());
+                    if (px == null || py == null || pw == null || ph == null) {
+                      throw Exception('Invalid rectangle numeric values.');
+                    }
+                    coords = {'x': px, 'y': py, 'w': pw, 'h': ph};
+                  } else if (tapPoints.isNotEmpty) {
+                    // fallback to single tap point
+                    final first = tapPoints.first;
+                    coords = {'x': first['x']!, 'y': first['y']!, 'w': 1, 'h': 1};
+                  } else {
+                    throw Exception(
+                        "Provide rectangle (draw or enter x,y,w,h) or at least one tap point.");
+                  }
+
+                  if (questionImageUrls.isEmpty) {
+                    throw Exception(
+                        "Please add at least one image for Tap on Image question.");
+                  }
+
                   await _manager.addQuestion(
                     type: 'tap_image',
                     subjectId: selectedSubjectId!,
@@ -522,7 +623,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     conceptId: conceptIdForQuestion,
                     questionText: qText,
                     hintText: hint,
-                    correctCoordinates: {'x': first['x']!, 'y': first['y']!},
+                    correctCoordinates: coords,
                     images: questionImageUrls,
                   );
                   break;
@@ -579,7 +680,10 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
     tapXController.clear();
     tapYController.clear();
+    tapWController.clear();
+    tapHController.clear();
     tapPoints.clear();
+    _tapRectPixels = null;
 
     _pickedImages = [];
 
@@ -809,9 +913,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                 title: Text("${p['left']}  ↔  ${p['right']}"),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete),
-                  onPressed: () {
-                    setState(() => mcqMatchPairs.remove(p));
-                  },
+                  onPressed: () => setState(() => mcqMatchPairs.remove(p)),
                 ),
               ),
             ),
@@ -968,49 +1070,133 @@ class _AdminPanelViewState extends State<AdminPanelView> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const Text(
+              'Define correct area: either draw a rectangle on the image OR enter x,y,w,h (pixels).',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: tapXController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'X',
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: tapYController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Y',
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_location_alt),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.crop_square),
+                  label: const Text('Draw rectangle'),
                   onPressed: () {
-                    final sx = tapXController.text.trim();
-                    final sy = tapYController.text.trim();
-                    if (sx.isNotEmpty && sy.isNotEmpty) {
-                      final x = int.tryParse(sx);
-                      final y = int.tryParse(sy);
-                      if (x != null && y != null) {
-                        setState(() {
-                          tapPoints.add({'x': x, 'y': y});
-                          tapXController.clear();
-                          tapYController.clear();
-                        });
-                      }
+                    if (_pickedImages.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Pick an image first (Add Images).')),
+                      );
+                      return;
                     }
+                    // Use first picked image for rectangle drawing
+                    _openRectangleSelectorForImage(_pickedImages.first);
+                  },
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Clear rectangle'),
+                  onPressed: () {
+                    setState(() {
+                      _tapRectPixels = null;
+                      tapXController.clear();
+                      tapYController.clear();
+                      tapWController.clear();
+                      tapHController.clear();
+                    });
                   },
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                SizedBox(
+                  width: 100,
+                  child: TextFormField(
+                    controller: tapXController,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'X (px)',
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                SizedBox(
+                  width: 100,
+                  child: TextFormField(
+                    controller: tapYController,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Y (px)',
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                SizedBox(
+                  width: 100,
+                  child: TextFormField(
+                    controller: tapWController,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'W (px)',
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                SizedBox(
+                  width: 100,
+                  child: TextFormField(
+                    controller: tapHController,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'H (px)',
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Use manual rect'),
+                  onPressed: () {
+                    final sx = tapXController.text.trim();
+                    final sy = tapYController.text.trim();
+                    final sw = tapWController.text.trim();
+                    final sh = tapHController.text.trim();
+                    final px = int.tryParse(sx);
+                    final py = int.tryParse(sy);
+                    final pw = int.tryParse(sw);
+                    final ph = int.tryParse(sh);
+                    if (px == null || py == null || pw == null || ph == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Enter valid numbers for x,y,w,h')),
+                      );
+                      return;
+                    }
+                    setState(() {
+                      _tapRectPixels = {'x': px, 'y': py, 'w': pw, 'h': ph};
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Manual rectangle saved.')),
+                    );
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_tapRectPixels != null)
+              Card(
+                color: Colors.grey.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Selected rectangle: x=${_tapRectPixels!['x']}, y=${_tapRectPixels!['y']}, '
+                    'w=${_tapRectPixels!['w']}, h=${_tapRectPixels!['h']}',
+                  ),
+                ),
+              ),
+            const SizedBox(height: 12),
             const SizedBox(height: 8),
             ...tapPoints.map(
               (pt) => ListTile(
@@ -1078,7 +1264,6 @@ class _AdminPanelViewState extends State<AdminPanelView> {
             validator: (v) => v == null ? 'Please select a topic' : null,
           ),
           const SizedBox(height: 10),
-          // Concept dropdown (REQUIRED for questions)
           DropdownButtonFormField<String>(
             value: selectedConceptId,
             decoration: const InputDecoration(
@@ -1112,6 +1297,11 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                   _tempDraggableImage = null;
                   _tempTargetImage = null;
                   tapPoints.clear();
+                  _tapRectPixels = null;
+                  tapXController.clear();
+                  tapYController.clear();
+                  tapWController.clear();
+                  tapHController.clear();
                 });
               }
             },
@@ -1119,13 +1309,9 @@ class _AdminPanelViewState extends State<AdminPanelView> {
           const SizedBox(height: 10),
           _buildFormField(label: 'Question Text', controller: questionTextController),
           _buildFormField(label: 'Hint Text', controller: hintTextController),
-
-          // images picker (available for EVERY question type)
           const SizedBox(height: 10),
           _buildImagePicker(),
           const SizedBox(height: 10),
-
-          // Type-specific fields
           _buildQuestionTypeSpecificFields(),
         ],
       );
