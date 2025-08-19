@@ -8,6 +8,7 @@ import 'package:learningdart/enums/menu_action.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:learningdart/utilities/logout_helper.dart';
+import 'package:learningdart/views/new_subject_select_view.dart';
 
 class UserHomeView extends StatefulWidget {
   const UserHomeView({super.key});
@@ -99,6 +100,18 @@ class _UserHomeViewState extends State<UserHomeView> {
     }
   }
 
+  // Navigate to subject selection
+  void _navigateToSubjectSelect() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => NewSubjectSelectView(username: userName),
+      ),
+    ).then((_) {
+      // Reload subjects when returning from subject selection
+      _loadUserSubjects();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -164,8 +177,7 @@ class _UserHomeViewState extends State<UserHomeView> {
       backgroundColor: Colors.white,
       body: ListView(
         children: [
-          _searchField(),
-          const SizedBox(height: 40),
+          const SizedBox(height: 40), // Removed _searchField()
           Padding(
             padding: const EdgeInsets.only(left: 20),
             child: Text(
@@ -180,14 +192,14 @@ class _UserHomeViewState extends State<UserHomeView> {
           const SizedBox(height: 20),
           _categoriesSection(),
           const SizedBox(height: 40),
-          _dietSection(),
+          _statsSection(),
           const SizedBox(height: 40),
         ],
       ),
     );
   }
 
-  Column _dietSection() {
+  Column _statsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -260,22 +272,70 @@ class _UserHomeViewState extends State<UserHomeView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 20),
-          child: Text(
-            'Subjects',
-            style: TextStyle(
-              color: Colors.black,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+        Padding(
+          padding: const EdgeInsets.only(left: 20, right: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Subjects',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              GestureDetector(
+                onTap: _navigateToSubjectSelect,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xff92A3FD).withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.add,
+                    color: Color(0xff92A3FD),
+                    size: 24,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 15),
         SizedBox(
           height: 120,
           child: categories.isEmpty
-              ? const Center(child: Text("No subjects found"))
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.school_outlined,
+                        size: 32,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "No subjects yet",
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Tap + to add subjects",
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
               : ListView.separated(
                   itemCount: categories.length,
                   scrollDirection: Axis.horizontal,
@@ -283,76 +343,55 @@ class _UserHomeViewState extends State<UserHomeView> {
                   separatorBuilder: (context, index) =>
                       const SizedBox(width: 25),
                   itemBuilder: (context, index) {
-                    return Container(
-                      width: 100,
-                      decoration: BoxDecoration(
-                        // ignore: deprecated_member_use
-                        color: categories[index].boxColor.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: SvgPicture.asset(categories[index].iconPath),
-                            ),
+                    return GestureDetector(
+                      onTap: () {
+                        // Navigate to quiz or subject details
+                        // You can implement this navigation based on your app flow
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Selected ${categories[index].name}'),
+                            duration: const Duration(seconds: 1),
                           ),
-                          Text(
-                            categories[index].name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w400,
-                              color: Colors.black,
-                              fontSize: 14,
+                        );
+                      },
+                      child: Container(
+                        width: 100,
+                        decoration: BoxDecoration(
+                          // ignore: deprecated_member_use
+                          color: categories[index].boxColor.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            Container(
+                              width: 50,
+                              height: 50,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: SvgPicture.asset(categories[index].iconPath),
+                              ),
                             ),
-                          ),
-                        ],
+                            Text(
+                              categories[index].name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w400,
+                                color: Colors.black,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
                 ),
         ),
       ],
-    );
-  }
-
-  Container _searchField() {
-    return Container(
-      margin: const EdgeInsets.only(top: 40, left: 20, right: 20),
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            // ignore: deprecated_member_use
-            color: const Color(0xff1D1617).withOpacity(0.11),
-            blurRadius: 40,
-            spreadRadius: 0.0,
-          ),
-        ],
-      ),
-      child: TextField(
-        decoration: InputDecoration(
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.all(15),
-          hintText: 'Search Subject',
-          hintStyle: const TextStyle(color: Color(0xffDDDADA), fontSize: 14),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.all(12),
-            child: SvgPicture.asset('assets/icons/Search.svg'),
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
     );
   }
 }

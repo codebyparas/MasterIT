@@ -5,27 +5,35 @@ import 'package:learningdart/enums/menu_action.dart';
 import 'package:learningdart/services/auth/auth_service.dart';
 import 'package:learningdart/services/cloud/firebase_cloud_storage.dart';
 import 'package:learningdart/models/category_model.dart';
-import 'package:learningdart/views/user_home_view.dart'; // Add this import
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-class SubjectSelectView extends StatefulWidget {
+class NewSubjectSelectView extends StatefulWidget {
   final String username;
-  const SubjectSelectView({super.key, required this.username});
+  const NewSubjectSelectView({super.key, required this.username});
 
   @override
-  State<SubjectSelectView> createState() => _SubjectSelectViewState();
+  State<NewSubjectSelectView> createState() => _NewSubjectSelectViewState();
 }
 
-class _SubjectSelectViewState extends State<SubjectSelectView> {
+class _NewSubjectSelectViewState extends State<NewSubjectSelectView> {
   final _manager = FirebaseCloudStorage();
   List<CategoryModel> _subjects = [];
+  List<String> _userSubjects = []; // Track user's current subjects
   bool _isLoading = true;
-  bool _isProcessing = false; // Add this for handling subject selection
+  bool _isProcessing = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadSubjects();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([
+      _loadSubjects(),
+      _loadUserSubjects(),
+    ]);
   }
 
   Future<void> _loadSubjects() async {
@@ -55,8 +63,43 @@ class _SubjectSelectViewState extends State<SubjectSelectView> {
     }
   }
 
+  Future<void> _loadUserSubjects() async {
+    try {
+      final user = AuthService.firebase().currentUser;
+      if (user == null) return;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.id)
+          .get();
+
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        if (data != null) {
+          List<dynamic> subjects = data['subjectsIntroduced'] ?? [];
+          setState(() {
+            _userSubjects = subjects.map((s) => s.toString()).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error loading user subjects: $e");
+    }
+  }
+
   Future<void> _onSubjectTap(String subject) async {
-    if (_isProcessing) return; // Prevent multiple taps
+    if (_isProcessing) return;
+
+    // Check if subject is already added
+    if (_userSubjects.contains(subject)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$subject is already in your subjects!'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isProcessing = true;
@@ -76,7 +119,7 @@ class _SubjectSelectViewState extends State<SubjectSelectView> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(width: 20),
-                  Text("Setting up your profile..."),
+                  Text("Adding subject..."),
                 ],
               ),
             ),
@@ -90,23 +133,38 @@ class _SubjectSelectViewState extends State<SubjectSelectView> {
         throw Exception("No user logged in");
       }
 
-      // Complete initial setup with selected subject
-      await FirebaseCloudStorage().completeInitialSetup(
-        uid: user.id,
-        name: widget.username,
-        subjectsIntroduced: [subject],
-      );
+      // Get current subjects and append the new one
+      final updatedSubjects = [..._userSubjects, subject];
+
+      // Update user document with the new subject appended
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.id)
+          .update({
+        'subjectsIntroduced': updatedSubjects,
+      });
+
+      // Update local state
+      setState(() {
+        _userSubjects = updatedSubjects;
+      });
 
       // Close loading dialog
       if (mounted) Navigator.of(context).pop();
 
-      // Navigate to UserHomeView
+      // Show success message
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => const UserHomeView(),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$subject added successfully!'),
+            backgroundColor: Colors.green,
           ),
         );
+      }
+
+      // Navigate back to UserHomeView or pop back
+      if (mounted) {
+        Navigator.of(context).pop(); // Use pop() instead of pushReplacement()
       }
     } catch (e) {
       // Close loading dialog if it's open
@@ -119,7 +177,7 @@ class _SubjectSelectViewState extends State<SubjectSelectView> {
           builder: (BuildContext context) {
             return AlertDialog(
               title: const Text('Error'),
-              content: Text('Failed to set up profile: $e'),
+              content: Text('Failed to add subject: $e'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -145,7 +203,7 @@ class _SubjectSelectViewState extends State<SubjectSelectView> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text(
-          "Choose a Subject",
+          "Add a Subject",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
@@ -178,13 +236,23 @@ class _SubjectSelectViewState extends State<SubjectSelectView> {
           children: [
             const SizedBox(height: 16),
             const Text(
-              "Select a subject to master...",
+              "Select a new subject to add...",
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF1D1617),
               ),
             ),
+            if (_userSubjects.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                "Current subjects: ${_userSubjects.join(', ')}",
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             Expanded(
               child: _buildContent(),
@@ -236,7 +304,7 @@ class _SubjectSelectViewState extends State<SubjectSelectView> {
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: _loadSubjects,
+              onPressed: _loadData,
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
@@ -292,52 +360,75 @@ class _SubjectSelectViewState extends State<SubjectSelectView> {
       ),
       itemBuilder: (context, index) {
         final subject = _subjects[index];
+        final isAlreadyAdded = _userSubjects.contains(subject.name);
+
         return GestureDetector(
           onTap: _isProcessing ? null : () => _onSubjectTap(subject.name),
           child: Opacity(
-            opacity: _isProcessing ? 0.6 : 1.0, // Visual feedback during processing
+            opacity: _isProcessing ? 0.6 : (isAlreadyAdded ? 0.5 : 1.0),
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
-                // ignore: deprecated_member_use
-                color: subject.boxColor.withOpacity(0.3),
+                color: isAlreadyAdded
+                    // ignore: deprecated_member_use
+                    ? Colors.grey.withOpacity(0.3)
+                    // ignore: deprecated_member_use
+                    : subject.boxColor.withOpacity(0.3),
                 boxShadow: [
                   BoxShadow(
-                    // ignore: deprecated_member_use
-                    color: subject.boxColor.withOpacity(0.2),
+                    color: isAlreadyAdded
+                        // ignore: deprecated_member_use
+                        ? Colors.grey.withOpacity(0.2)
+                        // ignore: deprecated_member_use
+                        : subject.boxColor.withOpacity(0.2),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      // color: subject.boxColor.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                    ),
-                    child: SvgPicture.asset(
-                      subject.iconPath,
-                      height: 40,
-                      width: 40,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    subject.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Color(0xFF1D1617),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
+              // child: Column(
+                child: (
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                        ),
+                        child: SvgPicture.asset(
+                          subject.iconPath,
+                          height: 40,
+                          width: 40,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        subject.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: isAlreadyAdded
+                              ? Colors.grey
+                              : const Color(0xFF1D1617),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  )
+                  // if (isAlreadyAdded)
+                  //   const Positioned(
+                  //     top: 8,
+                  //     right: 8,
+                  //     child: Icon(
+                  //       Icons.check_circle,
+                  //       color: Colors.green,
+                  //       size: 24,
+                  //     ),
+                  //   ),
+                ),
+              // ),
             ),
           ),
         );

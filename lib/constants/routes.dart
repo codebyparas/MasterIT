@@ -1,6 +1,7 @@
 const loginRoute='/login/';
 const registerRoute='/register/';
 const subjectSelectRoute='/subject-select/';
+const newSubjectSelectRoute='/new-subject-select/';
 const verifyEmailRoute='/verify-email/';
 const userHomeRoute='/user-home/';
 const selectUsernameRoute='/select-username/';
