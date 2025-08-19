@@ -74,7 +74,7 @@ class QuestionWidget extends StatelessWidget {
   }
 }
 
-// Fixed MCQ Widget with proper state management
+// Updated MCQ Widget with larger images
 class MCQWidget extends StatefulWidget {
   final QuizQuestion question;
   final Function(dynamic) onAnswer;
@@ -108,7 +108,6 @@ class _MCQWidgetState extends State<MCQWidget> {
   @override
   void didUpdateWidget(MCQWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reset selection when question changes
     if (oldWidget.question.id != widget.question.id) {
       setState(() {
         selectedAnswer = null;
@@ -140,30 +139,51 @@ class _MCQWidgetState extends State<MCQWidget> {
             ),
           ),
           const SizedBox(height: 16),
+          
+          // FIXED: Larger image display
           if (widget.question.images.isNotEmpty)
             Container(
-              height: 200,
+              height: 300, // Increased from 200 to 300
               width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 16),
+              margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade300),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
                   widget.question.images.first,
-                  fit: BoxFit.contain,
+                  fit: BoxFit.cover, // Changed from contain to cover for better filling
+                  width: double.infinity,
+                  height: 300,
                   errorBuilder: (context, error, stackTrace) {
-                    return const Center(
-                      child: Icon(Icons.image_not_supported, size: 50),
+                    return Container(
+                      height: 300,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+                            SizedBox(height: 8),
+                            Text('Image not available', style: TextStyle(color: Colors.grey)),
+                          ],
+                        ),
+                      ),
                     );
                   },
                 ),
               ),
             ),
           
-          // MCQ Options
+          // MCQ Options (unchanged)
           ...shuffledOptions.map((option) {
             final isSelected = selectedAnswer == option;
             final isCorrectOption = widget.question.correctAnswer == option;
@@ -235,7 +255,7 @@ class _MCQWidgetState extends State<MCQWidget> {
   }
 }
 
-// Fixed Fill-up Widget with proper controller reset
+// Updated Fill-up Widget with larger images
 class FillUpWidget extends StatefulWidget {
   final QuizQuestion question;
   final Function(dynamic) onAnswer;
@@ -268,7 +288,6 @@ class _FillUpWidgetState extends State<FillUpWidget> {
   @override
   void didUpdateWidget(FillUpWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reset controller when question changes
     if (oldWidget.question.id != widget.question.id) {
       _controller.clear();
     }
@@ -296,23 +315,44 @@ class _FillUpWidgetState extends State<FillUpWidget> {
             ),
           ),
           const SizedBox(height: 16),
+          
+          // FIXED: Larger image display
           if (widget.question.images.isNotEmpty)
             Container(
-              height: 200,
+              height: 280, // Increased height
               width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 16),
+              margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade300),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
                   widget.question.images.first,
-                  fit: BoxFit.contain,
+                  fit: BoxFit.cover, // Better image filling
+                  width: double.infinity,
+                  height: 280,
                   errorBuilder: (context, error, stackTrace) {
-                    return const Center(
-                      child: Icon(Icons.image_not_supported, size: 50),
+                    return Container(
+                      height: 280,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+                            SizedBox(height: 8),
+                            Text('Image not available', style: TextStyle(color: Colors.grey)),
+                          ],
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -385,7 +425,7 @@ class _FillUpWidgetState extends State<FillUpWidget> {
   }
 }
 
-// Updated Ordering Widget with image display and proper state reset
+// Updated Ordering Widget with larger images
 class OrderingWidget extends StatefulWidget {
   final QuizQuestion question;
   final Function(dynamic) onAnswer;
@@ -419,7 +459,6 @@ class _OrderingWidgetState extends State<OrderingWidget> {
   @override
   void didUpdateWidget(OrderingWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reset items when question changes
     if (oldWidget.question.id != widget.question.id) {
       _initializeItems();
     }
@@ -449,27 +488,42 @@ class _OrderingWidgetState extends State<OrderingWidget> {
           ),
           const SizedBox(height: 16),
           
-          // FIXED: Display image if available from database
+          // FIXED: Much larger image display for ordering questions
           if (widget.question.images.isNotEmpty)
             Container(
+              height: 320, // Increased height significantly
               width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 20),
+              margin: const EdgeInsets.only(bottom: 24),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade300),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
                   widget.question.images.first,
-                  fit: BoxFit.contain,
-                  height: 200,
+                  fit: BoxFit.cover, // Cover for better visual impact
                   width: double.infinity,
+                  height: 320,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      height: 200,
+                      height: 320,
                       child: const Center(
-                        child: Icon(Icons.image_not_supported, size: 50),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+                            SizedBox(height: 8),
+                            Text('Image not available', style: TextStyle(color: Colors.grey)),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -629,7 +683,7 @@ class _OrderingWidgetState extends State<OrderingWidget> {
   }
 }
 
-// Enhanced Drag & Drop Widget with better state management
+// Enhanced Drag & Drop Widget with larger images
 class DragDropWidget extends StatefulWidget {
   final QuizQuestion question;
   final Function(dynamic) onAnswer;
@@ -656,7 +710,6 @@ class _DragDropWidgetState extends State<DragDropWidget> {
   @override
   void didUpdateWidget(DragDropWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reset dropped target when question changes
     if (oldWidget.question.id != widget.question.id) {
       setState(() {
         droppedTarget = null;
@@ -690,42 +743,55 @@ class _DragDropWidgetState extends State<DragDropWidget> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
+          
+          // FIXED: Larger draggable image
           Center(
             child: Draggable<String>(
               data: 'draggable_image',
               feedback: Container(
-                width: 80,
-                height: 80,
+                width: 120, // Increased from 80
+                height: 120, // Increased from 80
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [BoxShadow(blurRadius: 10, color: Colors.black26)],
-                ),
-                child: Image.network(draggableUrl, fit: BoxFit.cover),
-              ),
-              childWhenDragging: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.grey.shade300,
-                ),
-                child: const Icon(Icons.image, color: Colors.grey),
-              ),
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [BoxShadow(blurRadius: 15, color: Colors.black26)],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(draggableUrl, fit: BoxFit.cover),
+                ),
+              ),
+              childWhenDragging: Container(
+                width: 150, // Increased from 100
+                height: 150, // Increased from 100
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey.shade300,
+                  border: Border.all(color: Colors.grey.shade400, width: 2),
+                ),
+                child: const Icon(Icons.image, color: Colors.grey, size: 40),
+              ),
+              child: Container(
+                width: 150, // Increased from 100
+                height: 150, // Increased from 100
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
                   child: Image.network(
                     draggableUrl,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return const Center(
-                        child: Icon(Icons.image_not_supported),
+                        child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
                       );
                     },
                   ),
@@ -734,6 +800,8 @@ class _DragDropWidgetState extends State<DragDropWidget> {
             ),
           ),
           const SizedBox(height: 30),
+          
+          // Drop targets grid
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
