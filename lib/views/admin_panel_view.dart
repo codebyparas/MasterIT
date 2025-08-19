@@ -76,12 +76,13 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   // Ordering
   final orderingItems = TextEditingController();
 
-  // Drag & Drop
-  final dragItemController = TextEditingController();
-  final dragTargetController = TextEditingController();
-  final List<Map<String, dynamic>> dragMappings = [];
-  XFile? _tempDraggableImage;
-  XFile? _tempTargetImage;
+  // Drag & Drop - Modified: one image, four text options, one correct target
+  final dragOption1Controller = TextEditingController();
+  final dragOption2Controller = TextEditingController();
+  final dragOption3Controller = TextEditingController();
+  final dragOption4Controller = TextEditingController();
+  final dragCorrectTargetController = TextEditingController();
+  XFile? _dragDropImage;
 
   // Tap on Image - allow manual or drawn rectangle
   final tapXController = TextEditingController();
@@ -125,8 +126,11 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     fillupAnswer.dispose();
     orderingItems.dispose();
 
-    dragItemController.dispose();
-    dragTargetController.dispose();
+    dragOption1Controller.dispose();
+    dragOption2Controller.dispose();
+    dragOption3Controller.dispose();
+    dragOption4Controller.dispose();
+    dragCorrectTargetController.dispose();
 
     tapXController.dispose();
     tapYController.dispose();
@@ -174,30 +178,14 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     }
   }
 
-  Future<void> _pickTempDraggableImage() async {
+  Future<void> _pickDragDropImage() async {
     try {
       final picked = await _picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 85,
       );
       if (picked != null) {
-        setState(() => _tempDraggableImage = picked);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Image pick error: $e')),
-      );
-    }
-  }
-
-  Future<void> _pickTempTargetImage() async {
-    try {
-      final picked = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-      if (picked != null) {
-        setState(() => _tempTargetImage = picked);
+        setState(() => _dragDropImage = picked);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -237,43 +225,6 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     }
 
     return result;
-  }
-
-  // ---------------- Drag & Drop helpers ----------------
-
-  void _addDragMappingFromCurrentInputs() {
-    final leftText = dragItemController.text.trim();
-    final rightText = dragTargetController.text.trim();
-
-    if ((leftText.isEmpty && _tempDraggableImage == null) ||
-        (rightText.isEmpty && _tempTargetImage == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Provide text or select image for both draggable and target.'),
-        ),
-      );
-      return;
-    }
-
-    final draggable = _tempDraggableImage != null
-        ? {'type': 'image', 'file': _tempDraggableImage}
-        : {'type': 'text', 'value': leftText};
-
-    final target = _tempTargetImage != null
-        ? {'type': 'image', 'file': _tempTargetImage}
-        : {'type': 'text', 'value': rightText};
-
-    setState(() {
-      dragMappings.add({'draggable': draggable, 'target': target});
-      dragItemController.clear();
-      dragTargetController.clear();
-      _tempDraggableImage = null;
-      _tempTargetImage = null;
-    });
-  }
-
-  void _removeDragMapping(int idx) {
-    setState(() => dragMappings.removeAt(idx));
   }
 
   // ---------------- Rectangle selector integration ----------------
@@ -428,15 +379,8 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
             // Gather files to upload
             final Set<XFile> allFiles = {..._pickedImages};
-            for (final m in dragMappings) {
-              final draggable = m['draggable'] as Map<String, dynamic>;
-              final target = m['target'] as Map<String, dynamic>;
-              if (draggable['type'] == 'image' && draggable['file'] is XFile) {
-                allFiles.add(draggable['file'] as XFile);
-              }
-              if (target['type'] == 'image' && target['file'] is XFile) {
-                allFiles.add(target['file'] as XFile);
-              }
+            if (_dragDropImage != null) {
+              allFiles.add(_dragDropImage!);
             }
 
             final fileToUrl = await _uploadFilesToSupabase(allFiles.toList());
@@ -527,48 +471,40 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
               case 'Drag & Drop':
                 {
-                  if (dragMappings.isEmpty) {
-                    throw Exception("Add at least one draggable → target mapping.");
+                  if (_dragDropImage == null) {
+                    throw Exception("Please select a draggable image.");
                   }
 
-                  final List<Map<String, dynamic>> mappingPayload = [];
-                  final List<dynamic> draggablesFlattened = [];
-                  final List<dynamic> boxesFlattened = [];
+                  final option1 = dragOption1Controller.text.trim();
+                  final option2 = dragOption2Controller.text.trim();
+                  final option3 = dragOption3Controller.text.trim();
+                  final option4 = dragOption4Controller.text.trim();
+                  final correctTarget = dragCorrectTargetController.text.trim();
 
-                  for (final m in dragMappings) {
-                    final draggable = m['draggable'] as Map<String, dynamic>;
-                    final target = m['target'] as Map<String, dynamic>;
-
-                    dynamic leftValue;
-                    dynamic rightValue;
-
-                    if (draggable['type'] == 'image' && draggable['file'] is XFile) {
-                      leftValue = fileToUrl[(draggable['file'] as XFile).path];
-                    } else {
-                      leftValue = draggable['value'] as String;
-                    }
-
-                    if (target['type'] == 'image' && target['file'] is XFile) {
-                      rightValue = fileToUrl[(target['file'] as XFile).path];
-                    } else {
-                      rightValue = target['value'] as String;
-                    }
-
-                    mappingPayload.add({'left': leftValue, 'right': rightValue});
-                    draggablesFlattened.add(leftValue);
-                    boxesFlattened.add(rightValue);
+                  if (option1.isEmpty || option2.isEmpty || option3.isEmpty || option4.isEmpty) {
+                    throw Exception("Please fill all four target options.");
                   }
 
+                  if (correctTarget.isEmpty) {
+                    throw Exception("Please specify the correct target text.");
+                  }
+
+                  final options = [option1, option2, option3, option4];
+                  if (!options.contains(correctTarget)) {
+                    throw Exception("Correct target must match one of the four options.");
+                  }
+
+                  // Get the uploaded image URL
+                  final draggableImageUrl = fileToUrl[_dragDropImage!.path]!;
+
+                  // Create the answer payload
                   final answerPayload = {
-                    'mapping': mappingPayload,
-                    'draggables': draggablesFlattened,
-                    'boxes': boxesFlattened,
+                    'draggable': draggableImageUrl,
+                    'options': options,
+                    'correctTarget': correctTarget,
                   };
 
-                  final Set<String> allImageUrls = {...questionImageUrls};
-                  for (final url in fileToUrl.values) {
-                    allImageUrls.add(url);
-                  }
+                  final Set<String> allImageUrls = {...questionImageUrls, draggableImageUrl};
 
                   await _manager.addQuestion(
                     type: 'drag_drop',
@@ -672,11 +608,12 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     fillupAnswer.clear();
     orderingItems.clear();
 
-    dragItemController.clear();
-    dragTargetController.clear();
-    dragMappings.clear();
-    _tempDraggableImage = null;
-    _tempTargetImage = null;
+    dragOption1Controller.clear();
+    dragOption2Controller.clear();
+    dragOption3Controller.clear();
+    dragOption4Controller.clear();
+    dragCorrectTargetController.clear();
+    _dragDropImage = null;
 
     tapXController.clear();
     tapYController.clear();
@@ -931,138 +868,95 @@ class _AdminPanelViewState extends State<AdminPanelView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Add draggable → target pair (each can be text OR an image)',
+              'Setup: Upload one draggable image and enter four target options',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: dragItemController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Draggable (text)',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Pick image for draggable',
-                  icon: const Icon(Icons.image),
-                  onPressed: _pickTempDraggableImage,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: dragTargetController,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Target (text)',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Pick image for target',
-                  icon: const Icon(Icons.image_outlined),
-                  onPressed: _pickTempTargetImage,
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: _addDragMappingFromCurrentInputs,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (_tempDraggableImage != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Row(
-                  children: [
-                    const Text('Pending draggable image:'),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 60,
-                      height: 60,
-                      child: Image.file(File(_tempDraggableImage!.path), fit: BoxFit.cover),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () => setState(() => _tempDraggableImage = null),
-                      child: const Text('Remove'),
-                    ),
-                  ],
-                ),
-              ),
-            if (_tempTargetImage != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Row(
-                  children: [
-                    const Text('Pending target image:'),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 60,
-                      height: 60,
-                      child: Image.file(File(_tempTargetImage!.path), fit: BoxFit.cover),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () => setState(() => _tempTargetImage = null),
-                      child: const Text('Remove'),
-                    ),
-                  ],
-                ),
-              ),
             const SizedBox(height: 12),
-            const Text('Mappings', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 6),
-            ...dragMappings.asMap().entries.map((entry) {
-              final idx = entry.key;
-              final map = entry.value;
-              final draggable = map['draggable'] as Map<String, dynamic>;
-              final target = map['target'] as Map<String, dynamic>;
-
-              Widget leftWidget;
-              if (draggable['type'] == 'image' && draggable['file'] is XFile) {
-                leftWidget = SizedBox(
-                  width: 60,
-                  height: 60,
-                  child: Image.file(File((draggable['file'] as XFile).path), fit: BoxFit.cover),
-                );
-              } else {
-                leftWidget = Text(draggable['value'] ?? '');
-              }
-
-              Widget rightWidget;
-              if (target['type'] == 'image' && target['file'] is XFile) {
-                rightWidget = SizedBox(
-                  width: 60,
-                  height: 60,
-                  child: Image.file(File((target['file'] as XFile).path), fit: BoxFit.cover),
-                );
-              } else {
-                rightWidget = Text(target['value'] ?? '');
-              }
-
-              return ListTile(
-                title: Row(
+            
+            // Image picker for draggable item
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: leftWidget),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.arrow_forward),
-                    const SizedBox(width: 8),
-                    Expanded(child: rightWidget),
+                    const Text(
+                      'Draggable Image:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.image),
+                          label: Text(_dragDropImage == null ? 'Select Image' : 'Image Selected'),
+                          onPressed: _pickDragDropImage,
+                        ),
+                        if (_dragDropImage != null) ...[
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 60,
+                            height: 60,
+                            child: Image.file(File(_dragDropImage!.path), fit: BoxFit.cover),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () => setState(() => _dragDropImage = null),
+                            child: const Text('Remove'),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => _removeDragMapping(idx),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Four target options
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Target Options (Drop Zones):',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildFormField(label: 'Option 1', controller: dragOption1Controller),
+                    _buildFormField(label: 'Option 2', controller: dragOption2Controller),
+                    _buildFormField(label: 'Option 3', controller: dragOption3Controller),
+                    _buildFormField(label: 'Option 4', controller: dragOption4Controller),
+                  ],
                 ),
-              );
-            }),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Correct target
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Correct Target:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildFormField(
+                      label: 'Enter the correct target text (must match one of the options above)',
+                      controller: dragCorrectTargetController,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         );
 
@@ -1293,9 +1187,12 @@ class _AdminPanelViewState extends State<AdminPanelView> {
               if (val != null) {
                 setState(() {
                   selectedQuestionType = val;
-                  dragMappings.clear();
-                  _tempDraggableImage = null;
-                  _tempTargetImage = null;
+                  _dragDropImage = null;
+                  dragOption1Controller.clear();
+                  dragOption2Controller.clear();
+                  dragOption3Controller.clear();
+                  dragOption4Controller.clear();
+                  dragCorrectTargetController.clear();
                   tapPoints.clear();
                   _tapRectPixels = null;
                   tapXController.clear();

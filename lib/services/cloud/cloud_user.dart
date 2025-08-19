@@ -9,6 +9,7 @@ class CloudUser {
   final String email;
   final bool initialSetupDone;
   final int streak;
+  final int xp;
   final int quizzesTaken;
   final DateTime? lastActive;
   final Map<String, dynamic> strength; // topicId -> strength value
@@ -21,6 +22,7 @@ class CloudUser {
     required this.email,
     required this.initialSetupDone,
     required this.streak,
+    required this.xp,
     required this.quizzesTaken,
     required this.lastActive,
     required this.strength,
@@ -34,6 +36,7 @@ class CloudUser {
         email = snapshot.data()?[userEmailFieldName] ?? '',
         initialSetupDone = snapshot.data()?[userInitialSetupDoneFieldName] ?? false,
         streak = snapshot.data()?[userStreakFieldName] ?? 0,
+        xp = snapshot.data()?[userXPFieldNAme] ?? 0,
         quizzesTaken = snapshot.data()?[userQuizzesTakenFieldName] ?? 0,
         lastActive = (snapshot.data()?[userLastActiveFieldName] as Timestamp?)?.toDate(),
         strength = Map<String, dynamic>.from(snapshot.data()?[userStrengthFieldName] ?? {}),

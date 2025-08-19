@@ -6,6 +6,7 @@ const userInitialSetupDoneFieldName = 'initialSetupDone';
 const userLastActiveFieldName = 'lastActive';
 const userQuizzesTakenFieldName = 'quizzesTaken';
 const userStreakFieldName = 'streak';
+const userXPFieldNAme = 'xp';
 const userStrengthFieldName = 'strength'; // Map<String, dynamic>
 const userSubjectsIntroducedFieldName = 'subjectsIntroduced'; // List<String>
 const userTopicsInProgressFieldName = 'topicsInProgress'; // Map<String, String> {topicId: status}

@@ -33,6 +33,7 @@ class FirebaseCloudStorage {
         userEmailFieldName: email,
         userInitialSetupDoneFieldName: false,
         userStreakFieldName: 0,
+        userXPFieldNAme: 0,
         userStrengthFieldName: {},
         userQuizzesTakenFieldName: 0,
         userLastActiveFieldName: Timestamp.now(),

@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:learningdart/models/category_model.dart';
 import 'package:learningdart/models/stats_model.dart';
-import 'package:learningdart/models/achievements_model.dart';
+// import 'package:learningdart/models/achievements_model.dart';
 import 'package:flutter/material.dart';
 import 'package:learningdart/enums/menu_action.dart';
 // ignore: depend_on_referenced_packages
@@ -19,7 +19,7 @@ class UserHomeView extends StatefulWidget {
 class _UserHomeViewState extends State<UserHomeView> {
   List<CategoryModel> categories = [];
   List<StatsModel> stats = [];
-  List<AchievementsModel> achievments = [];
+  // List<AchievementsModel> achievments = [];
 
   String userName = "";
   int streak = 0;
@@ -34,7 +34,7 @@ class _UserHomeViewState extends State<UserHomeView> {
   }
 
   void _getInitialInfo() {
-    achievments = AchievementsModel.getPopularDiets();
+    // achievments = AchievementsModel.getPopularDiets();
   }
 
   Future<void> _loadUserData() async {
@@ -84,7 +84,7 @@ class _UserHomeViewState extends State<UserHomeView> {
           await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
       if (userDoc.exists) {
-        List<dynamic> topics = userDoc['topicsIntroduced'] ?? [];
+        List<dynamic> topics = userDoc['subjectsIntroduced'] ?? [];
 
         List<CategoryModel> loaded = topics.map((topic) {
           return CategoryModel.fromSubject(topic.toString());
@@ -286,6 +286,7 @@ class _UserHomeViewState extends State<UserHomeView> {
                     return Container(
                       width: 100,
                       decoration: BoxDecoration(
+                        // ignore: deprecated_member_use
                         color: categories[index].boxColor.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -328,6 +329,7 @@ class _UserHomeViewState extends State<UserHomeView> {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
+            // ignore: deprecated_member_use
             color: const Color(0xff1D1617).withOpacity(0.11),
             blurRadius: 40,
             spreadRadius: 0.0,

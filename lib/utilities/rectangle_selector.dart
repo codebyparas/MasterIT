@@ -28,7 +28,7 @@ class _RectangleSelectorPageState extends State<RectangleSelectorPage> {
   Rect? _rectInImage; // in displayed-image pixels
 
   // Cached computed layout values for the current layout pass
-  Size? _lastConstraintsSize;
+  // Size? _lastConstraintsSize;
   double _displayedImageWidth = 0;
   double _displayedImageHeight = 0;
   double _displayedImageOffsetLeft = 0;
