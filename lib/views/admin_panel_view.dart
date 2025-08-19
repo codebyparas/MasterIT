@@ -28,7 +28,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   final _uuid = const Uuid();
 
   String selectedEntryType = 'Subject';
-  final List<String> entryTypes = ['Subject', 'Topic', 'Question'];
+  final List<String> entryTypes = ['Subject', 'Topic', 'Concept', 'Question'];
 
   String selectedQuestionType = 'MCQ';
   final List<String> questionTypes = [
@@ -37,16 +37,19 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     'Drag & Drop',
     'Tap on Image',
     'Ordering',
-  ]; // "Match Pairs" removed from global dropdown per your request.
+  ]; // "Match Pairs" removed from global dropdown per request.
 
   List<Map<String, dynamic>> subjects = [];
   List<Map<String, dynamic>> topics = [];
+  List<Map<String, dynamic>> concepts = [];
   String? selectedSubjectId;
   String? selectedTopicId;
+  String? selectedConceptId;
 
   // Common fields
   final subjectNameController = TextEditingController();
   final topicNameController = TextEditingController();
+  final conceptNameController = TextEditingController(); // for adding concept
   final questionTextController = TextEditingController();
   final hintTextController = TextEditingController();
 
@@ -55,9 +58,9 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   final optionB = TextEditingController();
   final optionC = TextEditingController();
   final optionD = TextEditingController();
-  final correctAnswer = TextEditingController(); // expects A/B/C/D or full text
+  final correctAnswer = TextEditingController(); // A/B/C/D or full text
 
-  // MCQ match-pairs inside MCQ (new)
+  // MCQ match-pairs inside MCQ (optional)
   final mcqLeftPairController = TextEditingController();
   final mcqRightPairController = TextEditingController();
   final List<Map<String, String>> mcqMatchPairs = [];
@@ -68,30 +71,19 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   // Ordering
   final orderingItems = TextEditingController(); // comma-separated items
 
-  // Drag & Drop (we'll support text or images)
-  final dragItemController =
-      TextEditingController(); // used when adding a text draggable
-  final dragTargetController =
-      TextEditingController(); // used when adding a text target
-
-  // We'll keep a list of mapping entries; each mapping entry:
-  // {
-  //   'draggable': {'type':'text'|'image', 'value':String (text or tempPath)},
-  //   'target': {'type':'text'|'image', 'value':String (text or tempPath)}
-  // }
-  final List<Map<String, dynamic>> dragMappings = [];
-
-  // Temporary picked image for a draggable/target before adding to mapping:
+  // Drag & Drop (support text or images)
+  final dragItemController = TextEditingController();
+  final dragTargetController = TextEditingController();
+  final List<Map<String, dynamic>> dragMappings = []; // mapping entries
   XFile? _tempDraggableImage;
   XFile? _tempTargetImage;
 
-  // Tap on Image (X,Y)
+  // Tap on Image
   final tapXController = TextEditingController();
   final tapYController = TextEditingController();
-  final List<Map<String, int>> tapPoints =
-      []; // store multiple; we'll use first if present
+  final List<Map<String, int>> tapPoints = [];
 
-  // Question-level images (picked via "Add Images" button)
+  // Question-level images
   List<XFile> _pickedImages = [];
   bool _isUploadingImages = false;
 
@@ -107,6 +99,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   void dispose() {
     subjectNameController.dispose();
     topicNameController.dispose();
+    conceptNameController.dispose();
     questionTextController.dispose();
     hintTextController.dispose();
 
@@ -145,6 +138,13 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     });
   }
 
+  Future<void> _loadConcepts(String topicId) async {
+    final data = await _manager.getConcepts(topicId);
+    setState(() {
+      concepts = data;
+    });
+  }
+
   // ---------------- Image picker & upload helpers ----------------
 
   Future<void> _pickQuestionImages() async {
@@ -177,7 +177,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
       );
     }
   }
-  
+
   Future<void> _pickTempTargetImage() async {
     try {
       final picked = await _picker.pickImage(
@@ -194,9 +194,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     }
   }
 
-  /// Upload a list of XFile files to Supabase 'photos' bucket and return a map path->publicUrl.
-  /// NOTE: Supabase upload / getPublicUrl method signatures differ across versions.
-  /// This implements a commonly-used approach; adjust if your `supabase_flutter` version requires alternate API.
+  /// Upload list of XFile files to Supabase 'photos' bucket and return map path->publicUrl.
   Future<Map<String, String>> _uploadFilesToSupabase(List<XFile> files) async {
     final supabase = Supabase.instance.client;
     const bucket = 'photos';
@@ -210,20 +208,16 @@ class _AdminPanelViewState extends State<AdminPanelView> {
           final destination = 'questions/$fname';
           final f = File(file.path);
 
-          // upload - API can be: supabase.storage.from(bucket).upload(destination, f)
-          // or uploadBinary, etc. Use your version's upload method.
+          // Upload - adjust if your supabase client version requires different API
           await supabase.storage.from(bucket).upload(destination, f);
 
-          // get public url
-          // many versions: supabase.storage.from(bucket).getPublicUrl(destination) returns String
-          // if it returns object, adjust accordingly.
-          final publicRes = supabase.storage
-              .from(bucket)
-              .getPublicUrl(destination);
-
-          String? url;
-          url = publicRes;
-
+          // Get public url (many versions return String directly)
+          final publicRes = supabase.storage.from(bucket).getPublicUrl(destination);
+          String? url = publicRes;
+          if (url == null || url.isEmpty) {
+            // fallback construction
+            url = '${SupabaseConfig.supabaseUrl}/storage/v1/object/public/$bucket/$destination';
+          }
           result[file.path] = url;
         } catch (uploadErr) {
           debugPrint('Upload error (${file.name}): $uploadErr');
@@ -236,7 +230,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     return result;
   }
 
-  // ---------------- Drag & Drop mappings helpers ----------------
+  // ---------------- Drag & Drop helpers ----------------
 
   void _addDragMappingFromCurrentInputs() {
     final leftText = dragItemController.text.trim();
@@ -264,7 +258,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
     setState(() {
       dragMappings.add({'draggable': draggable, 'target': target});
-      // reset temp inputs
+      // reset
       dragItemController.clear();
       dragTargetController.clear();
       _tempDraggableImage = null;
@@ -314,8 +308,29 @@ class _AdminPanelViewState extends State<AdminPanelView> {
               name: topicName,
               subjectId: selectedSubjectId!,
             );
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Topic created (id: $topicId)')),
+            );
+            break;
+          }
+
+        case 'Concept':
+          {
+            if (selectedSubjectId == null || selectedTopicId == null) {
+              throw Exception("Please select subject and topic.");
+            }
+            final conceptName = conceptNameController.text.trim();
+            if (conceptName.isEmpty) throw Exception("Concept name is required.");
+
+            final conceptId = await _manager.addConcept(
+              name: conceptName,
+              subjectId: selectedSubjectId!,
+              topicId: selectedTopicId!,
+            );
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Concept created (id: $conceptId)')),
             );
             break;
           }
@@ -325,13 +340,17 @@ class _AdminPanelViewState extends State<AdminPanelView> {
             if (selectedSubjectId == null || selectedTopicId == null) {
               throw Exception("Please select subject and topic.");
             }
+            // NEW: make concept required for a question
+            if (selectedConceptId == null) {
+              throw Exception("Please select a concept (required).");
+            }
 
             final qText = questionTextController.text.trim();
             final hint = hintTextController.text.trim().isEmpty
                 ? null
                 : hintTextController.text.trim();
 
-            // Collect all images that need upload (question-level + images used in dragMappings).
+            // Gather files to upload (question-level + drag mapping images)
             final Set<XFile> allFiles = {..._pickedImages};
             for (final m in dragMappings) {
               final draggable = m['draggable'] as Map<String, dynamic>;
@@ -344,16 +363,17 @@ class _AdminPanelViewState extends State<AdminPanelView> {
               }
             }
 
-            // Upload all image files and obtain path->url map.
             final fileToUrl = await _uploadFilesToSupabase(allFiles.toList());
 
-            // Build a list of question-level image urls (from _pickedImages)
+            // question-level image urls
             final List<String> questionImageUrls = _pickedImages
                 .map((f) => fileToUrl[f.path])
                 .whereType<String>()
                 .toList();
 
-            // Now handle question types
+            // concept id is REQUIRED for questions
+            final conceptIdForQuestion = selectedConceptId!;
+
             switch (selectedQuestionType) {
               case 'MCQ':
                 {
@@ -363,7 +383,6 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     optionC.text.trim(),
                     optionD.text.trim(),
                   ];
-                  // Normalize correct answer letter (A/B/...) to actual option text if letter provided
                   String normalizedCorrect = correctAnswer.text.trim();
                   final letter = normalizedCorrect.toUpperCase();
                   if (letter.length == 1 &&
@@ -372,26 +391,23 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     normalizedCorrect = options[letter.codeUnitAt(0) - 65];
                   }
 
-                  // Prepare match pairs for MCQ (if any)
                   final List<Map<String, String>> matchPairsForMCQ =
                       mcqMatchPairs
-                          .map(
-                            (p) => {'left': p['left']!, 'right': p['right']!},
-                          )
+                          .map((p) => {'left': p['left']!, 'right': p['right']!})
                           .toList();
 
                   await _manager.addQuestion(
                     type: 'mcq',
                     subjectId: selectedSubjectId!,
                     topicId: selectedTopicId!,
+                    conceptId: conceptIdForQuestion,
                     questionText: qText,
                     hintText: hint,
                     correctAnswer: normalizedCorrect,
                     options: options,
                     images: questionImageUrls,
-                    matchPair: matchPairsForMCQ.isEmpty
-                        ? null
-                        : matchPairsForMCQ,
+                    matchPair:
+                        matchPairsForMCQ.isEmpty ? null : matchPairsForMCQ,
                   );
                   break;
                 }
@@ -403,6 +419,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     type: 'fillup',
                     subjectId: selectedSubjectId!,
                     topicId: selectedTopicId!,
+                    conceptId: conceptIdForQuestion,
                     questionText: qText,
                     hintText: hint,
                     correctAnswer: answers,
@@ -425,6 +442,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     type: 'ordering',
                     subjectId: selectedSubjectId!,
                     topicId: selectedTopicId!,
+                    conceptId: conceptIdForQuestion,
                     questionText: qText,
                     hintText: hint,
                     correctAnswer: phrases,
@@ -437,11 +455,8 @@ class _AdminPanelViewState extends State<AdminPanelView> {
               case 'Drag & Drop':
                 {
                   if (dragMappings.isEmpty)
-                    throw Exception(
-                      "Add at least one draggable → target mapping.",
-                    );
+                    throw Exception("Add at least one draggable → target mapping.");
 
-                  // Transform mappings into final mapping structure with uploaded URLs for images.
                   final List<Map<String, dynamic>> mappingPayload = [];
                   final List<dynamic> draggablesFlattened = [];
                   final List<dynamic> boxesFlattened = [];
@@ -466,22 +481,17 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                       rightValue = target['value'] as String;
                     }
 
-                    mappingPayload.add({
-                      'left': leftValue,
-                      'right': rightValue,
-                    });
+                    mappingPayload.add({'left': leftValue, 'right': rightValue});
                     draggablesFlattened.add(leftValue);
                     boxesFlattened.add(rightValue);
                   }
 
-                  // For drag & drop we store a structured correctAnswer (mapping + flattened lists)
                   final answerPayload = {
                     'mapping': mappingPayload,
                     'draggables': draggablesFlattened,
                     'boxes': boxesFlattened,
                   };
 
-                  // include question-level images + any uploaded mapping images (deduplicated)
                   final Set<String> allImageUrls = {...questionImageUrls};
                   for (final url in fileToUrl.values) {
                     if (url != null) allImageUrls.add(url);
@@ -491,6 +501,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     type: 'drag_drop',
                     subjectId: selectedSubjectId!,
                     topicId: selectedTopicId!,
+                    conceptId: conceptIdForQuestion,
                     questionText: qText,
                     hintText: hint,
                     correctAnswer: answerPayload,
@@ -508,6 +519,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     type: 'tap_image',
                     subjectId: selectedSubjectId!,
                     topicId: selectedTopicId!,
+                    conceptId: conceptIdForQuestion,
                     questionText: qText,
                     hintText: hint,
                     correctCoordinates: {'x': first['x']!, 'y': first['y']!},
@@ -517,9 +529,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                 }
 
               default:
-                throw Exception(
-                  'Unsupported question type: $selectedQuestionType',
-                );
+                throw Exception('Unsupported question type: $selectedQuestionType');
             }
 
             break;
@@ -533,9 +543,9 @@ class _AdminPanelViewState extends State<AdminPanelView> {
         const SnackBar(content: Text('Entry added successfully!')),
       );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
     } finally {
       setState(() => isSubmitting = false);
     }
@@ -544,6 +554,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   void _resetForm() {
     subjectNameController.clear();
     topicNameController.clear();
+    conceptNameController.clear();
     questionTextController.clear();
     hintTextController.clear();
 
@@ -575,7 +586,9 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     setState(() {
       selectedSubjectId = null;
       selectedTopicId = null;
+      selectedConceptId = null;
       topics = [];
+      concepts = [];
       selectedQuestionType = 'MCQ';
     });
   }
@@ -592,8 +605,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
           border: const OutlineInputBorder(),
           labelText: label,
         ),
-        validator: (val) =>
-            val == null || val.trim().isEmpty ? 'Required' : null,
+        validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
       ),
     );
   }
@@ -602,30 +614,67 @@ class _AdminPanelViewState extends State<AdminPanelView> {
       _buildFormField(label: 'Subject Name', controller: subjectNameController);
 
   Widget _buildTopicForm() => Column(
-    children: [
-      DropdownButtonFormField<String>(
-        value: selectedSubjectId,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          labelText: 'Select Subject',
-        ),
-        items: subjects
-            .map(
-              (s) => DropdownMenuItem(
-                value: s['id'] as String,
-                child: Text(s['name'] as String),
-              ),
-            )
-            .toList(),
-        onChanged: (val) {
-          setState(() => selectedSubjectId = val);
-          if (val != null) _loadTopics(val);
-        },
-      ),
-      const SizedBox(height: 10),
-      _buildFormField(label: 'Topic Name', controller: topicNameController),
-    ],
-  );
+        children: [
+          DropdownButtonFormField<String>(
+            value: selectedSubjectId,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Select Subject',
+            ),
+            items: subjects
+                .map((s) => DropdownMenuItem(
+                      value: s['id'] as String,
+                      child: Text(s['name'] as String),
+                    ))
+                .toList(),
+            onChanged: (val) {
+              setState(() => selectedSubjectId = val);
+              if (val != null) _loadTopics(val);
+            },
+          ),
+          const SizedBox(height: 10),
+          _buildFormField(label: 'Topic Name', controller: topicNameController),
+        ],
+      );
+
+  Widget _buildConceptForm() => Column(
+        children: [
+          DropdownButtonFormField<String>(
+            value: selectedSubjectId,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Select Subject',
+            ),
+            items: subjects
+                .map((s) => DropdownMenuItem(
+                      value: s['id'] as String,
+                      child: Text(s['name'] as String),
+                    ))
+                .toList(),
+            onChanged: (val) {
+              setState(() => selectedSubjectId = val);
+              if (val != null) _loadTopics(val);
+            },
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: selectedTopicId,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Select Topic',
+            ),
+            items: topics
+                .map((t) => DropdownMenuItem(
+                      value: t['id'] as String,
+                      child: Text(t['name'] as String),
+                    ))
+                .toList(),
+            onChanged: (val) => setState(() => selectedTopicId = val),
+          ),
+          const SizedBox(height: 10),
+          _buildFormField(label: 'Concept Name', controller: conceptNameController),
+        ],
+      );
 
   Widget _buildImagePicker() {
     return Column(
@@ -675,9 +724,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                       top: 2,
                       right: 2,
                       child: InkWell(
-                        onTap: () {
-                          setState(() => _pickedImages.removeAt(idx));
-                        },
+                        onTap: () => setState(() => _pickedImages.removeAt(idx)),
                         child: const CircleAvatar(
                           radius: 12,
                           backgroundColor: Colors.black54,
@@ -713,7 +760,6 @@ class _AdminPanelViewState extends State<AdminPanelView> {
               controller: correctAnswer,
             ),
             const SizedBox(height: 8),
-            // MCQ-match-pairs builder
             const Text(
               'Optional: Add match pair(s) for this MCQ (left ↔ right)',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
@@ -773,16 +819,10 @@ class _AdminPanelViewState extends State<AdminPanelView> {
         );
 
       case 'Fill-up':
-        return _buildFormField(
-          label: 'Correct Answer',
-          controller: fillupAnswer,
-        );
+        return _buildFormField(label: 'Correct Answer', controller: fillupAnswer);
 
       case 'Ordering':
-        return _buildFormField(
-          label: 'Items (comma separated)',
-          controller: orderingItems,
-        );
+        return _buildFormField(label: 'Items (comma separated)', controller: orderingItems);
 
       case 'Drag & Drop':
         return Column(
@@ -834,7 +874,6 @@ class _AdminPanelViewState extends State<AdminPanelView> {
               ],
             ),
             const SizedBox(height: 8),
-            // show pending chosen images (if any)
             if (_tempDraggableImage != null)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
@@ -845,15 +884,11 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     SizedBox(
                       width: 60,
                       height: 60,
-                      child: Image.file(
-                        File(_tempDraggableImage!.path),
-                        fit: BoxFit.cover,
-                      ),
+                      child: Image.file(File(_tempDraggableImage!.path), fit: BoxFit.cover),
                     ),
                     const SizedBox(width: 8),
                     TextButton(
-                      onPressed: () =>
-                          setState(() => _tempDraggableImage = null),
+                      onPressed: () => setState(() => _tempDraggableImage = null),
                       child: const Text('Remove'),
                     ),
                   ],
@@ -869,10 +904,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     SizedBox(
                       width: 60,
                       height: 60,
-                      child: Image.file(
-                        File(_tempTargetImage!.path),
-                        fit: BoxFit.cover,
-                      ),
+                      child: Image.file(File(_tempTargetImage!.path), fit: BoxFit.cover),
                     ),
                     const SizedBox(width: 8),
                     TextButton(
@@ -883,11 +915,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                 ),
               ),
             const SizedBox(height: 12),
-            // list mapping entries
-            const Text(
-              'Mappings',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
+            const Text('Mappings', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
             ...dragMappings.asMap().entries.map((entry) {
               final idx = entry.key;
@@ -900,10 +928,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                 leftWidget = SizedBox(
                   width: 60,
                   height: 60,
-                  child: Image.file(
-                    File((draggable['file'] as XFile).path),
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.file(File((draggable['file'] as XFile).path), fit: BoxFit.cover),
                 );
               } else {
                 leftWidget = Text(draggable['value'] ?? '');
@@ -914,10 +939,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                 rightWidget = SizedBox(
                   width: 60,
                   height: 60,
-                  child: Image.file(
-                    File((target['file'] as XFile).path),
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.file(File((target['file'] as XFile).path), fit: BoxFit.cover),
                 );
               } else {
                 rightWidget = Text(target['value'] ?? '');
@@ -1008,85 +1030,105 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   }
 
   Widget _buildQuestionForm() => Column(
-    children: [
-      DropdownButtonFormField<String>(
-        value: selectedSubjectId,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          labelText: 'Select Subject',
-        ),
-        items: subjects
-            .map(
-              (s) => DropdownMenuItem(
-                value: s['id'] as String,
-                child: Text(s['name'] as String),
-              ),
-            )
-            .toList(),
-        onChanged: (val) {
-          setState(() {
-            selectedSubjectId = val;
-            selectedTopicId = null;
-          });
-          if (val != null) _loadTopics(val);
-        },
-      ),
-      const SizedBox(height: 10),
-      DropdownButtonFormField<String>(
-        value: selectedTopicId,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          labelText: 'Select Topic',
-        ),
-        items: topics
-            .map(
-              (t) => DropdownMenuItem(
-                value: t['id'] as String,
-                child: Text(t['name'] as String),
-              ),
-            )
-            .toList(),
-        onChanged: (val) => setState(() => selectedTopicId = val),
-      ),
-      const SizedBox(height: 10),
-      DropdownButtonFormField<String>(
-        value: selectedQuestionType,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          labelText: 'Question Type',
-        ),
-        items: questionTypes
-            .map((q) => DropdownMenuItem(value: q, child: Text(q)))
-            .toList(),
-        onChanged: (val) {
-          if (val != null) {
-            setState(() {
-              selectedQuestionType = val;
-              // Clear type-specific buffers when switching type
-              dragMappings.clear();
-              _tempDraggableImage = null;
-              _tempTargetImage = null;
-              tapPoints.clear();
-            });
-          }
-        },
-      ),
-      const SizedBox(height: 10),
-      _buildFormField(
-        label: 'Question Text',
-        controller: questionTextController,
-      ),
-      _buildFormField(label: 'Hint Text', controller: hintTextController),
+        children: [
+          DropdownButtonFormField<String>(
+            value: selectedSubjectId,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Select Subject',
+            ),
+            items: subjects
+                .map((s) => DropdownMenuItem(
+                      value: s['id'] as String,
+                      child: Text(s['name'] as String),
+                    ))
+                .toList(),
+            onChanged: (val) {
+              setState(() {
+                selectedSubjectId = val;
+                selectedTopicId = null;
+                concepts = [];
+                selectedConceptId = null;
+              });
+              if (val != null) _loadTopics(val);
+            },
+            validator: (v) => v == null ? 'Please select a subject' : null,
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: selectedTopicId,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Select Topic',
+            ),
+            items: topics
+                .map((t) => DropdownMenuItem(
+                      value: t['id'] as String,
+                      child: Text(t['name'] as String),
+                    ))
+                .toList(),
+            onChanged: (val) {
+              setState(() {
+                selectedTopicId = val;
+                selectedConceptId = null;
+                concepts = [];
+              });
+              if (val != null) _loadConcepts(val);
+            },
+            validator: (v) => v == null ? 'Please select a topic' : null,
+          ),
+          const SizedBox(height: 10),
+          // Concept dropdown (REQUIRED for questions)
+          DropdownButtonFormField<String>(
+            value: selectedConceptId,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Select Concept (required)',
+            ),
+            items: concepts
+                .map((c) => DropdownMenuItem(
+                      value: c['id'] as String,
+                      child: Text(c['name'] as String),
+                    ))
+                .toList(),
+            onChanged: (val) => setState(() => selectedConceptId = val),
+            validator: (v) => v == null ? 'Please select a concept' : null,
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: selectedQuestionType,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Question Type',
+            ),
+            items: questionTypes
+                .map((q) => DropdownMenuItem(value: q, child: Text(q)))
+                .toList(),
+            onChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  selectedQuestionType = val;
+                  dragMappings.clear();
+                  _tempDraggableImage = null;
+                  _tempTargetImage = null;
+                  tapPoints.clear();
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 10),
+          _buildFormField(label: 'Question Text', controller: questionTextController),
+          _buildFormField(label: 'Hint Text', controller: hintTextController),
 
-      // images picker (available for EVERY question type)
-      const SizedBox(height: 10),
-      _buildImagePicker(),
-      const SizedBox(height: 10),
+          // images picker (available for EVERY question type)
+          const SizedBox(height: 10),
+          _buildImagePicker(),
+          const SizedBox(height: 10),
 
-      // Type-specific fields
-      _buildQuestionTypeSpecificFields(),
-    ],
-  );
+          // Type-specific fields
+          _buildQuestionTypeSpecificFields(),
+        ],
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -1139,7 +1181,9 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                           selectedEntryType = val;
                           selectedSubjectId = null;
                           selectedTopicId = null;
+                          selectedConceptId = null;
                           topics = [];
+                          concepts = [];
                           _pickedImages = [];
                         });
                       }
@@ -1148,6 +1192,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                   const SizedBox(height: 20),
                   if (selectedEntryType == 'Subject') _buildSubjectForm(),
                   if (selectedEntryType == 'Topic') _buildTopicForm(),
+                  if (selectedEntryType == 'Concept') _buildConceptForm(),
                   if (selectedEntryType == 'Question') _buildQuestionForm(),
                   const SizedBox(height: 20),
                   SizedBox(
@@ -1155,18 +1200,13 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.save),
                       label: isSubmitting
-                          ? const CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            )
+                          ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
                           : const Text("Submit"),
                       onPressed: isSubmitting ? null : _handleSubmit,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         textStyle: const TextStyle(fontSize: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),

@@ -1,6 +1,8 @@
 // firebase_cloud_storage.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:learningdart/services/cloud/cloud_question.dart';
 import 'cloud_user.dart';
+import 'dart:math';
 import 'cloud_storage_constants.dart';
 import 'cloud_storage_exceptions.dart';
 
@@ -157,6 +159,164 @@ class FirebaseCloudStorage {
               'name': doc.data()[conceptNameFieldName],
             })
         .toList();
+  }
+
+  // MARK: - per-user seen questions (to avoid global 'shown' flags)
+  
+  // Add a seen record for a user when a question is shown to them.
+  Future<void> markQuestionAsShown({
+    required String uid,
+    required String questionId,
+    required String questionType,
+    required String conceptId,
+  }) async {
+    try {
+      final seenDoc = users.doc(uid).collection('seen_questions').doc(questionId);
+      await seenDoc.set({
+        'questionId': questionId,
+        'questionType': questionType,
+        'conceptId': conceptId,
+        'shownAt': FieldValue.serverTimestamp(),
+      });
+      // Also update lastShownFormat for the concept
+      await users
+          .doc(uid)
+          .collection('concept_progress')
+          .doc(conceptId)
+          .set({
+        'lastShownFormat': questionType,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      // bubble up or convert to custom exception if desired
+      rethrow;
+    }
+  }
+  
+  // Delete seen entries for a concept for a user (used when a cycle completes)
+  Future<void> resetSeenQuestionsForUserConcept({
+    required String uid,
+    required String conceptId,
+  }) async {
+    try {
+      final col = users.doc(uid).collection('seen_questions');
+      final snaps = await col.where('conceptId', isEqualTo: conceptId).get();
+      if (snaps.docs.isEmpty) return;
+      // batch delete
+      final batch = _db.batch();
+      for (final d in snaps.docs){batch.delete(d.reference);}
+      await batch.commit();
+    } catch (e) {
+      rethrow;
+    }
+  }
+  
+  // Return the lastShownFormat for a user's concept (may be null)
+  Future<String?> getLastShownFormatForConcept({
+    required String uid,
+    required String conceptId,
+  }) async {
+    try {
+      final doc = await users.doc(uid).collection('concept_progress').doc(conceptId).get();
+      if (!doc.exists) return null;
+      
+      final data = doc.data();
+      if (data == null) return null;
+      
+      return data['lastShownFormat'] as String?;
+    } catch (e) {
+      rethrow;
+    }
+  }
+  
+  // Get list of unseen questions for a user for a given concept (optionally filter types).
+  // If unseen is empty, this function resets the seen docs for that concept and returns the full list.
+  Future<List<CloudQuestion>> getUnseenQuestionsForUserConcept({
+    required String uid,
+    required String conceptId,
+    List<String>? allowedTypes, // optional: filter types (e.g., ['mcq','tap_image'])
+  }) async {
+    try {
+      Query<Map<String, dynamic>> q = questions.where(questionConceptIdField, isEqualTo: conceptId);
+      if (allowedTypes != null && allowedTypes.isNotEmpty) {
+        // Firestore supports whereIn up to 10 elements - handle accordingly.
+        if (allowedTypes.length <= 10) {
+          q = q.where(questionTypeField, whereIn: allowedTypes);
+        } // else we simply fetch and filter client-side (below).
+      }
+  
+      final allSnap = await q.get();
+  
+      // get seen question ids for this user & concept
+      final seenSnap = await users
+          .doc(uid)
+          .collection('seen_questions')
+          .where('conceptId', isEqualTo: conceptId)
+          .get();
+  
+      final seenIds = seenSnap.docs.map((d) => d.id).toSet();
+  
+      final unseenDocs = allSnap.docs.where((d) => !seenIds.contains(d.id)).toList();
+  
+      if (unseenDocs.isEmpty) {
+        // cycle complete -> reset seen for that concept and return all questions (start a new cycle)
+        await resetSeenQuestionsForUserConcept(uid: uid, conceptId: conceptId);
+        return allSnap.docs.map((d) => CloudQuestion.fromSnapshot(d)).toList();
+      }
+  
+      return unseenDocs.map((d) => CloudQuestion.fromSnapshot(d)).toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
+  
+  // Pick next question for user + concept, prefer different format than lastShownFormat when possible.
+  // This also marks the chosen question as shown for the user (so the cycle advances).
+  Future<CloudQuestion?> pickAndMarkNextQuestionForUserConcept({
+    required String uid,
+    required String conceptId,
+    List<String>? allowedTypes, // optional filter
+  }) async {
+    try {
+      // 1) retrieve unseen questions for user
+      final unseen = await getUnseenQuestionsForUserConcept(
+        uid: uid,
+        conceptId: conceptId,
+        allowedTypes: allowedTypes,
+      );
+  
+      if (unseen.isEmpty) return null;
+  
+      // 2) attempt to prefer a different format than last shown
+      final lastFormat = await getLastShownFormatForConcept(uid: uid, conceptId: conceptId);
+  
+      List<CloudQuestion> candidates;
+      if (lastFormat != null) {
+        candidates = unseen.where((q) => q.type != lastFormat).toList();
+        if (candidates.isEmpty) {
+          // nothing that differs from last format; fallback to all unseen
+          candidates = unseen;
+        }
+      } else {
+        candidates = unseen;
+      }
+  
+      // 3) pick random candidate
+      final rand = Random();
+      final choice = candidates[rand.nextInt(candidates.length)];
+  
+      // 4) mark it as shown for the user (also updates lastShownFormat in same call)
+      await markQuestionAsShown(
+        uid: uid,
+        questionId: choice.documentId,
+        questionType: choice.type,
+        conceptId: conceptId,
+      );
+  
+      return choice;
+    } catch (e) {
+      rethrow;
+    }
   }
 
   // ------------------------ QUESTIONS (core add helper) ------------------------

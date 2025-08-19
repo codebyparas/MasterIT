@@ -4,7 +4,7 @@ import 'package:learningdart/views/admin_panel_view.dart';
 import 'package:learningdart/views/drag_ques_test.dart';
 import 'package:learningdart/views/map_ques_test.dart';
 import 'package:learningdart/views/select_username_view.dart';
-import 'package:learningdart/views/upload_photo_view.dart';
+// import 'package:learningdart/views/upload_photo_view.dart';
 import 'package:learningdart/views/user_home_view.dart';
 import 'package:learningdart/services/auth/auth_service.dart';
 import 'package:learningdart/views/login_view.dart';
