@@ -9,6 +9,9 @@ import 'package:learningdart/enums/menu_action.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:learningdart/utilities/logout_helper.dart';
 import 'package:learningdart/views/new_subject_select_view.dart';
+import 'package:learningdart/views/quiz_loading_view.dart';
+
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 
 class UserHomeView extends StatefulWidget {
   const UserHomeView({super.key});
@@ -17,7 +20,7 @@ class UserHomeView extends StatefulWidget {
   State<UserHomeView> createState() => _UserHomeViewState();
 }
 
-class _UserHomeViewState extends State<UserHomeView> {
+class _UserHomeViewState extends State<UserHomeView> with RouteAware {
   List<CategoryModel> categories = [];
   List<StatsModel> stats = [];
   // List<AchievementsModel> achievments = [];
@@ -25,11 +28,35 @@ class _UserHomeViewState extends State<UserHomeView> {
   String userName = "";
   int streak = 0;
   int quizzesTaken = 0;
+  int xp = 0;
 
   @override
   void initState() {
     super.initState();
     _getInitialInfo();
+    _loadUserData();
+    _loadUserSubjects();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes
+    if (ModalRoute.of(context) != null) {
+      routeObserver.subscribe(this, ModalRoute.of(context)! as PageRoute);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    // Called when returning to this screen from another screen
+    print("Returned to UserHomeView - refreshing data");
     _loadUserData();
     _loadUserSubjects();
   }
@@ -49,12 +76,13 @@ class _UserHomeViewState extends State<UserHomeView> {
           userName = userDoc['name'] ?? "User";
           streak = userDoc['streak'] ?? 0;
           quizzesTaken = userDoc['quizzesTaken'] ?? 0;
+          xp = userDoc['xp'] ?? 0;
 
           // Build stats from Firestore values
           stats = [
             StatsModel(
-              name: "Streak: $streak",
-              iconPath: 'assets/icons/java.svg',
+              name: "$streak",
+              iconPath: 'assets/icons/flames-icon.svg',
               level: '',
               duration: '',
               calorie: '',
@@ -62,13 +90,22 @@ class _UserHomeViewState extends State<UserHomeView> {
               boxColor: const Color(0xff9DCEFF),
             ),
             StatsModel(
-              name: "Quizzes Taken: $quizzesTaken",
-              iconPath: 'assets/icons/java.svg',
+              name: "XP $xp",
+              iconPath: 'assets/icons/lightning-thunder.svg',
               level: '',
               duration: '',
               calorie: '',
               viewIsSelected: false,
               boxColor: const Color(0xffEEA4CE),
+            ),
+            StatsModel(
+              name: "$quizzesTaken Quizzes Taken",
+              iconPath: 'assets/icons/trophy-icon.svg',
+              level: '',
+              duration: '',
+              calorie: '',
+              viewIsSelected: false,
+              boxColor: const Color(0xff9DCEFF),
             ),
           ];
         });
@@ -120,13 +157,17 @@ class _UserHomeViewState extends State<UserHomeView> {
           'MasterIT',
           style: TextStyle(
             color: Colors.black,
-            fontSize: 18,
+            fontSize: 30,
             fontWeight: FontWeight.bold,
           ),
         ),
         backgroundColor: Colors.white,
         elevation: 0.0,
         centerTitle: true,
+        iconTheme: const IconThemeData(
+          color: Colors.black, // Sets color for all icons in AppBar
+          size: 24,
+        ),
         leading: GestureDetector(
           onTap: () {},
           child: Container(
@@ -144,32 +185,21 @@ class _UserHomeViewState extends State<UserHomeView> {
           ),
         ),
         actions: [
-          PopupMenuButton<MenuAction>(
-            icon: Container(
-              margin: const EdgeInsets.all(10),
-              alignment: Alignment.center,
-              width: 37,
-              decoration: BoxDecoration(
-                color: const Color(0xffF7F8F8),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: SvgPicture.asset(
-                'assets/icons/dots.svg',
-                height: 5,
-                width: 5,
-              ),
+            IconButton(
+              onPressed: () async {
+                await _loadUserData();
+                await _loadUserSubjects();
+              },
+              icon: const Icon(Icons.refresh),
             ),
+          PopupMenuButton<MenuAction>(
             onSelected: (value) async {
-              switch (value) {
-                case MenuAction.logout:
-                  await handleLogout(context);
+              if (value == MenuAction.logout) {
+                await handleLogout(context);
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem<MenuAction>(
-                value: MenuAction.logout,
-                child: Text("Logout"),
-              ),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: MenuAction.logout, child: Text("Logout")),
             ],
           ),
         ],
@@ -177,21 +207,23 @@ class _UserHomeViewState extends State<UserHomeView> {
       backgroundColor: Colors.white,
       body: ListView(
         children: [
-          const SizedBox(height: 40), // Removed _searchField()
+          const SizedBox(height: 40),
           Padding(
             padding: const EdgeInsets.only(left: 20),
             child: Text(
               "Welcome, $userName 👋",
               style: const TextStyle(
                 color: Colors.black,
-                fontSize: 20,
+                fontSize: 22,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
           const SizedBox(height: 20),
+          // Subjects section - Now BIGGER
           _categoriesSection(),
-          const SizedBox(height: 40),
+          const SizedBox(height: 30),
+          // Stats section - Now SMALLER
           _statsSection(),
           const SizedBox(height: 40),
         ],
@@ -199,6 +231,7 @@ class _UserHomeViewState extends State<UserHomeView> {
     );
   }
 
+  // Stats section - Made SMALLER (reduced height from 240 to 120)
   Column _statsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,49 +249,51 @@ class _UserHomeViewState extends State<UserHomeView> {
         ),
         const SizedBox(height: 15),
         SizedBox(
-          height: 240,
+          height: 120, // Reduced from 240 to 120
           child: ListView.separated(
             itemBuilder: (context, index) {
               return Container(
-                width: 210,
+                width: 120, // Reduced from 210 to 120
                 decoration: BoxDecoration(
-                  // ignore: deprecated_member_use
                   color: stats[index].boxColor.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16), // Reduced radius
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    // 👇 Styled same as in categories
                     Container(
-                      width: 100,
-                      height: 100,
+                      width: 40, // Reduced from 100 to 50
+                      height: 40, // Reduced from 100 to 50
                       decoration: const BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: SvgPicture.asset(stats[index].iconPath),
+                        padding: const EdgeInsets.all(6.0), // Reduced padding
+                        child: SvgPicture.asset(
+                          stats[index].iconPath,
+                          width: 24, // Reduced from 40 to 24
+                          height: 24, // Reduced from 40 to 24
+                        ),
                       ),
                     ),
-                    Column(
-                      children: [
-                        Text(
-                          stats[index].name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black,
-                            fontSize: 16,
-                          ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: Text(
+                        stats[index].name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black,
+                          fontSize: 12, // Reduced from 16 to 12
                         ),
-                      ],
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ],
                 ),
               );
             },
-            separatorBuilder: (context, index) => const SizedBox(width: 25),
+            separatorBuilder: (context, index) => const SizedBox(width: 15), // Reduced separation
             itemCount: stats.length,
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -268,6 +303,7 @@ class _UserHomeViewState extends State<UserHomeView> {
     );
   }
 
+  // Categories section - Made BIGGER (increased height from 120 to 200)
   Column _categoriesSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,7 +342,7 @@ class _UserHomeViewState extends State<UserHomeView> {
         ),
         const SizedBox(height: 15),
         SizedBox(
-          height: 120,
+          height: 200, // Increased from 120 to 200
           child: categories.isEmpty
               ? Center(
                   child: Column(
@@ -314,23 +350,23 @@ class _UserHomeViewState extends State<UserHomeView> {
                     children: [
                       Icon(
                         Icons.school_outlined,
-                        size: 32,
+                        size: 48, // Increased from 32 to 48
                         color: Colors.grey.shade400,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       Text(
                         "No subjects yet",
                         style: TextStyle(
                           color: Colors.grey.shade600,
-                          fontSize: 14,
+                          fontSize: 16, // Increased from 14 to 16
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         "Tap + to add subjects",
                         style: TextStyle(
                           color: Colors.grey.shade500,
-                          fontSize: 12,
+                          fontSize: 14, // Increased from 12 to 14
                         ),
                       ),
                     ],
@@ -344,44 +380,56 @@ class _UserHomeViewState extends State<UserHomeView> {
                       const SizedBox(width: 25),
                   itemBuilder: (context, index) {
                     return GestureDetector(
+                      // In your _categoriesSection() onTap method in UserHomeView
                       onTap: () {
-                        // Navigate to quiz or subject details
-                        // You can implement this navigation based on your app flow
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Selected ${categories[index].name}'),
-                            duration: const Duration(seconds: 1),
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => QuizLoadingView(
+                              subjectId: categories[index].name,
+                              subjectName: categories[index].name,
+                            ),
                           ),
-                        );
+                        ).then((_) {
+                          // This code runs when user returns from quiz
+                          _loadUserData();
+                          _loadUserSubjects();
+                        });
                       },
                       child: Container(
-                        width: 100,
+                        width: 140, // Increased from 100 to 140
                         decoration: BoxDecoration(
-                          // ignore: deprecated_member_use
                           color: categories[index].boxColor.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20), // Increased radius
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
                             Container(
-                              width: 50,
-                              height: 50,
+                              width: 80, // Increased from 50 to 80
+                              height: 80, // Increased from 50 to 80
                               decoration: const BoxDecoration(
                                 color: Colors.white,
                                 shape: BoxShape.circle,
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: SvgPicture.asset(categories[index].iconPath),
+                                padding: const EdgeInsets.all(12.0), // Increased padding
+                                child: SvgPicture.asset(
+                                  categories[index].iconPath,
+                                  width: 40, // Increased from 24 to 40
+                                  height: 40, // Increased from 24 to 40
+                                ),
                               ),
                             ),
-                            Text(
-                              categories[index].name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w400,
-                                color: Colors.black,
-                                fontSize: 14,
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                              child: Text(
+                                categories[index].name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600, // Increased weight
+                                  color: Colors.black,
+                                  fontSize: 16, // Increased from 14 to 16
+                                ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                           ],

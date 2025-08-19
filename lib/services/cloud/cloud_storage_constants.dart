@@ -1,47 +1,42 @@
-// ------------------------ USERS ------------------------
-const userIdFieldName = 'id';
+// User fields
 const userNameFieldName = 'name';
 const userEmailFieldName = 'email';
 const userInitialSetupDoneFieldName = 'initialSetupDone';
-const userLastActiveFieldName = 'lastActive';
-const userQuizzesTakenFieldName = 'quizzesTaken';
 const userStreakFieldName = 'streak';
 const userXPFieldNAme = 'xp';
-const userStrengthFieldName = 'strength'; // Map<String, dynamic>
-const userSubjectsIntroducedFieldName = 'subjectsIntroduced'; // List<String>
-const userTopicsInProgressFieldName = 'topicsInProgress'; // Map<String, String> {topicId: status}
+const userStrengthFieldName = 'strength';
+const userQuizzesTakenFieldName = 'quizzesTaken';
+const userLastActiveFieldName = 'lastActive';
+const userSubjectsIntroducedFieldName = 'subjectsIntroduced';
+const userTopicsInProgressFieldName = 'topicsInProgress';
 
-// ------------------------ SUBJECTS ------------------------
-const subjectIdFieldName = 'id';
+// Subject fields
 const subjectNameFieldName = 'name';
 const subjectDescriptionFieldName = 'description';
 
-// ------------------------ TOPICS ------------------------
-const topicIdFieldName = 'id';
+// Topic fields
 const topicNameFieldName = 'name';
 const topicSubjectIdFieldName = 'subjectId';
-const topicPrerequisitesFieldName = 'prerequisites'; // List<String>
+const topicPrerequisitesFieldName = 'prerequisites';
 const topicOrderFieldName = 'order';
 
-// ------------------------ CONCEPTS ------------------------
-const conceptIdFieldName = 'id';
+// Concept fields
 const conceptNameFieldName = 'name';
 const conceptSubjectIdFieldName = 'subjectId';
 const conceptTopicIdFieldName = 'topicId';
 const conceptLastSeenFieldName = 'lastSeen';
 
-// ------------------------ QUESTIONS ------------------------
-const questionIdField = 'id';
+// Question fields
 const questionTypeField = 'type';
 const questionSubjectIdField = 'subjectId';
 const questionTopicIdField = 'topicId';
 const questionConceptIdField = 'conceptId';
 const questionTextField = 'questionText';
 const questionHintTextField = 'hintText';
-const questionCorrectAnswerField = 'correctAnswer'; // dynamic
-const questionOptionsField = 'options'; // List<String>
-const questionImageField = 'images'; // List<String> or single URL
-const questionMatchPairField = 'matchPair'; // List<Map<String,String>>
-const questionCorrectCoordinatesField = 'correctCoordinates'; // {x: int, y: int}
+const questionCorrectAnswerField = 'correctAnswer';
+const questionOptionsField = 'options';
+const questionImageField = 'images';
+const questionMatchPairField = 'matchPair';
+const questionCorrectCoordinatesField = 'correctCoordinates';
 const questionVersionNumberField = 'versionNumber';
 const questionCreatedAtField = 'createdAt';

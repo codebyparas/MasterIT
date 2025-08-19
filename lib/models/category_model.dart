@@ -11,7 +11,6 @@ class CategoryModel {
     required this.boxColor,
   });
 
-  /// Factory to map subject string → category design
   factory CategoryModel.fromSubject(String subject) {
     switch (subject.toLowerCase()) {
       case "java":

@@ -19,7 +19,6 @@ class _MapQuesViewState extends State<MapQuesView> {
   // Define regions with pixel bounds matching original image size
   final List<Region> regions = [
     Region(name: 'India', bounds: Rect.fromLTWH(300, 200, 100, 100)),
-    // Region(name: 'USA', bounds: Rect.fromLTWH(50, 100, 100, 80)),
     Region(name: 'Australia', bounds: Rect.fromLTWH(600, 400, 120, 100)),
     Region(name: 'Nepal', bounds: Rect.fromLTWH(148, 92, 90, 59)),
   ];
