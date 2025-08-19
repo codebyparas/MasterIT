@@ -3,7 +3,6 @@ import 'package:learningdart/constants/routes.dart';
 import 'package:learningdart/views/admin_panel_view.dart';
 import 'package:learningdart/views/drag_ques_test.dart';
 import 'package:learningdart/views/map_ques_test.dart';
-import 'package:learningdart/views/new_subject_select_view.dart';
 import 'package:learningdart/views/select_username_view.dart';
 // import 'package:learningdart/views/upload_photo_view.dart';
 import 'package:learningdart/views/user_home_view.dart';
@@ -24,6 +23,8 @@ void main() async {
   runApp(const MyApp());
 }
 
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -43,6 +44,7 @@ class MyApp extends StatelessWidget {
     // homeWidget=UploadPhotoView();
 
     return MaterialApp(
+      navigatorObservers: [routeObserver],
       title: 'MasterIT',
       theme: ThemeData(useMaterial3: false, primarySwatch: Colors.blue),
       home: homeWidget,

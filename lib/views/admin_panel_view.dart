@@ -92,7 +92,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
   final List<Map<String, int>> tapPoints = [];
 
   // Rectangle from drawing (pixel coordinates)
-  Map<String, int>? _tapRectPixels;
+  Map<String, double>? _tapRectPixels;
 
   // Question-level images
   List<XFile> _pickedImages = [];
@@ -237,7 +237,6 @@ class _AdminPanelViewState extends State<AdminPanelView> {
     return Size(img.width.toDouble(), img.height.toDouble());
   }
 
-  /// Open rectangle selector page and handle the normalized coordinates returned
   Future<void> _openRectangleSelectorForImage(XFile imageFile) async {
     try {
       final result = await Navigator.of(context).push<Map<String, double>>(
@@ -248,8 +247,6 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
       if (result == null) return;
 
-      // Rectangle selector returns Map<String, double> with keys: 'x', 'y', 'width', 'height'
-      // These are normalized coordinates (0.0 to 1.0) relative to the intrinsic image size
       if (!result.containsKey('x') || !result.containsKey('y') || 
           !result.containsKey('width') || !result.containsKey('height')) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -263,32 +260,18 @@ class _AdminPanelViewState extends State<AdminPanelView> {
       final normalizedWidth = result['width']!;
       final normalizedHeight = result['height']!;
 
-      // Convert normalized coordinates to pixel coordinates
-      final imgSize = await _getImagePixelSize(imageFile.path);
-      final px = (normalizedX * imgSize.width).round();
-      final py = (normalizedY * imgSize.height).round();
-      final pw = (normalizedWidth * imgSize.width).round();
-      final ph = (normalizedHeight * imgSize.height).round();
-
-      // Clamp to image bounds
-      final clampedX = px.clamp(0, imgSize.width.toInt());
-      final clampedY = py.clamp(0, imgSize.height.toInt());
-      final maxWidth = imgSize.width.toInt() - clampedX;
-      final maxHeight = imgSize.height.toInt() - clampedY;
-      final clampedW = pw.clamp(1, maxWidth);
-      final clampedH = ph.clamp(1, maxHeight);
-
       setState(() {
+        // FIXED: Now uses Map<String, double>
         _tapRectPixels = {
-          'x': clampedX,
-          'y': clampedY,
-          'w': clampedW,
-          'h': clampedH,
+          'x': normalizedX,
+          'y': normalizedY,
+          'w': normalizedWidth,
+          'h': normalizedHeight,
         };
-        tapXController.text = clampedX.toString();
-        tapYController.text = clampedY.toString();
-        tapWController.text = clampedW.toString();
-        tapHController.text = clampedH.toString();
+        tapXController.text = normalizedX.toStringAsFixed(3);
+        tapYController.text = normalizedY.toStringAsFixed(3);
+        tapWController.text = normalizedWidth.toStringAsFixed(3);
+        tapHController.text = normalizedHeight.toStringAsFixed(3);
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -521,45 +504,42 @@ class _AdminPanelViewState extends State<AdminPanelView> {
 
               case 'Tap on Image':
                 {
-                  // Prefer the rectangle if provided
-                  Map<String, int>? coords;
-
+                  Map<String, double>? coords;
+              
                   if (_tapRectPixels != null) {
                     coords = _tapRectPixels;
                   } else if (tapXController.text.isNotEmpty &&
                       tapYController.text.isNotEmpty &&
                       tapWController.text.isNotEmpty &&
                       tapHController.text.isNotEmpty) {
-                    final px = int.tryParse(tapXController.text.trim());
-                    final py = int.tryParse(tapYController.text.trim());
-                    final pw = int.tryParse(tapWController.text.trim());
-                    final ph = int.tryParse(tapHController.text.trim());
+                    final px = double.tryParse(tapXController.text.trim());
+                    final py = double.tryParse(tapYController.text.trim());
+                    final pw = double.tryParse(tapWController.text.trim());
+                    final ph = double.tryParse(tapHController.text.trim());
                     if (px == null || py == null || pw == null || ph == null) {
                       throw Exception('Invalid rectangle numeric values.');
                     }
                     coords = {'x': px, 'y': py, 'w': pw, 'h': ph};
-                  } else if (tapPoints.isNotEmpty) {
-                    // fallback to single tap point
-                    final first = tapPoints.first;
-                    coords = {'x': first['x']!, 'y': first['y']!, 'w': 1, 'h': 1};
                   } else {
-                    throw Exception(
-                        "Provide rectangle (draw or enter x,y,w,h) or at least one tap point.");
+                    throw Exception("Provide rectangle coordinates.");
                   }
-
+              
                   if (questionImageUrls.isEmpty) {
-                    throw Exception(
-                        "Please add at least one image for Tap on Image question.");
+                    throw Exception("Please add at least one image for Tap on Image question.");
                   }
-
-                  await _manager.addQuestion(
-                    type: 'tap_image',
+              
+                  // FIXED: Ensure coords is not null before passing
+                  if (coords == null) {
+                    throw Exception("Please define the correct area coordinates.");
+                  }
+              
+                  await _manager.addTapImageQuestion(
                     subjectId: selectedSubjectId!,
                     topicId: selectedTopicId!,
                     conceptId: conceptIdForQuestion,
                     questionText: qText,
                     hintText: hint,
-                    correctCoordinates: coords,
+                    correctCoordinates: coords, // Now guaranteed to be non-null
                     images: questionImageUrls,
                   );
                   break;
@@ -965,7 +945,7 @@ class _AdminPanelViewState extends State<AdminPanelView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Define correct area: either draw a rectangle on the image OR enter x,y,w,h (pixels).',
+              'Define correct area: either draw a rectangle on the image OR enter normalized coordinates (0.0-1.0).',
               style: TextStyle(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
@@ -1012,9 +992,10 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     controller: tapXController,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      labelText: 'X (px)',
+                      labelText: 'X (0.0-1.0)',
+                      hintText: '0.0-1.0',
                     ),
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ),
                 SizedBox(
@@ -1023,9 +1004,10 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     controller: tapYController,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      labelText: 'Y (px)',
+                      labelText: 'Y (0.0-1.0)',
+                      hintText: '0.0-1.0',
                     ),
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ),
                 SizedBox(
@@ -1034,9 +1016,10 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     controller: tapWController,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      labelText: 'W (px)',
+                      labelText: 'W (0.0-1.0)',
+                      hintText: '0.0-1.0',
                     ),
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ),
                 SizedBox(
@@ -1045,9 +1028,10 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     controller: tapHController,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      labelText: 'H (px)',
+                      labelText: 'H (0.0-1.0)',
+                      hintText: '0.0-1.0',
                     ),
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ),
                 ElevatedButton.icon(
@@ -1058,21 +1042,31 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                     final sy = tapYController.text.trim();
                     final sw = tapWController.text.trim();
                     final sh = tapHController.text.trim();
-                    final px = int.tryParse(sx);
-                    final py = int.tryParse(sy);
-                    final pw = int.tryParse(sw);
-                    final ph = int.tryParse(sh);
+                    final px = double.tryParse(sx);
+                    final py = double.tryParse(sy);
+                    final pw = double.tryParse(sw);
+                    final ph = double.tryParse(sh);
+                    
                     if (px == null || py == null || pw == null || ph == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Enter valid numbers for x,y,w,h')),
+                        const SnackBar(content: Text('Enter valid decimal numbers for x,y,w,h (0.0-1.0)')),
                       );
                       return;
                     }
+                    
+                    if (px < 0 || px > 1 || py < 0 || py > 1 || pw < 0 || pw > 1 || ph < 0 || ph > 1) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('All values must be between 0.0 and 1.0')),
+                      );
+                      return;
+                    }
+                    
                     setState(() {
+                      // FIXED: Now uses Map<String, double>
                       _tapRectPixels = {'x': px, 'y': py, 'w': pw, 'h': ph};
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Manual rectangle saved.')),
+                      const SnackBar(content: Text('Normalized rectangle saved.')),
                     );
                   },
                 ),
@@ -1085,22 +1079,12 @@ class _AdminPanelViewState extends State<AdminPanelView> {
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Text(
-                    'Selected rectangle: x=${_tapRectPixels!['x']}, y=${_tapRectPixels!['y']}, '
-                    'w=${_tapRectPixels!['w']}, h=${_tapRectPixels!['h']}',
+                    'Selected normalized rectangle: x=${_tapRectPixels!['x']?.toStringAsFixed(3)}, y=${_tapRectPixels!['y']?.toStringAsFixed(3)}, '
+                    'w=${_tapRectPixels!['w']?.toStringAsFixed(3)}, h=${_tapRectPixels!['h']?.toStringAsFixed(3)}',
                   ),
                 ),
               ),
             const SizedBox(height: 12),
-            const SizedBox(height: 8),
-            ...tapPoints.map(
-              (pt) => ListTile(
-                title: Text("x=${pt['x']}, y=${pt['y']}"),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete),
-                  onPressed: () => setState(() => tapPoints.remove(pt)),
-                ),
-              ),
-            ),
           ],
         );
 
