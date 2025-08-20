@@ -58,7 +58,7 @@ class _QuizLoadingViewState extends State<QuizLoadingView>
   }
 
   void _startLoadingMessages() {
-    Future.delayed(const Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 2000), () {
       if (mounted && _messageIndex < _loadingMessages.length - 1) {
         setState(() {
           _messageIndex++;

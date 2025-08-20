@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:learningdart/models/quiz_models.dart';
+import 'package:learningdart/views/user_home_view.dart';
 
 class QuizResultView extends StatelessWidget {
   final QuizState quizState;
@@ -323,7 +324,10 @@ class QuizResultView extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const UserHomeView()),
+                      (route) => route.isFirst, // Keep only the first route (AuthWrapper)
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,

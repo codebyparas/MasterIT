@@ -7,6 +7,10 @@ class AuthService implements AuthProvider{
   AuthService(this.provider);
   factory AuthService.firebase()=>AuthService(FirebaseAuthProvider());
   
+  // ADD THIS: Auth state changes stream delegation
+  @override
+  Stream<AuthUser?> get authStateChanges => provider.authStateChanges;
+  
   @override
   Future<AuthUser> createUser({required String email, required String password}) => provider.createUser(email: email, password: password);
   

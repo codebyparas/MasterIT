@@ -3,9 +3,18 @@ import 'package:learningdart/firebase_options.dart';
 import 'package:learningdart/services/auth/auth_user.dart';
 import 'package:learningdart/services/auth/auth_provider.dart';
 import 'package:learningdart/services/auth/auth_exceptions.dart';
-import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, FirebaseAuthException;
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth, FirebaseAuthException, User;
 
-class FirebaseAuthProvider implements AuthProvider{
+class FirebaseAuthProvider implements AuthProvider {
+  
+  // ADD THIS: Auth state changes stream implementation
+  @override
+  Stream<AuthUser?> get authStateChanges {
+    return FirebaseAuth.instance.authStateChanges().map((User? user) {
+      return user != null ? AuthUser.fromFirebase(user) : null;
+    });
+  }
+
   @override
   Future<AuthUser> createUser({required String email, required String password}) async {
     try{

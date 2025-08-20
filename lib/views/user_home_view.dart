@@ -1,16 +1,19 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:learningdart/models/category_model.dart';
 import 'package:learningdart/models/stats_model.dart';
-// import 'package:learningdart/models/achievements_model.dart';
 import 'package:flutter/material.dart';
 import 'package:learningdart/enums/menu_action.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:learningdart/services/quiz_service.dart';
 import 'package:learningdart/utilities/logout_helper.dart';
 import 'package:learningdart/views/new_subject_select_view.dart';
 import 'package:learningdart/views/quiz_loading_view.dart';
 
+// MAKE SURE this is the SAME instance used in main.dart
 final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 
 class UserHomeView extends StatefulWidget {
@@ -23,53 +26,138 @@ class UserHomeView extends StatefulWidget {
 class _UserHomeViewState extends State<UserHomeView> with RouteAware {
   List<CategoryModel> categories = [];
   List<StatsModel> stats = [];
-  // List<AchievementsModel> achievments = [];
-
+  
   String userName = "";
   int streak = 0;
   int quizzesTaken = 0;
   int xp = 0;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
     super.initState();
+    print("🏠 UserHomeView initState called");
     _getInitialInfo();
-    _loadUserData();
-    _loadUserSubjects();
+    
+    // Load data on first initialization
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _performAutoRefresh();
+    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Subscribe to route changes
-    if (ModalRoute.of(context) != null) {
-      routeObserver.subscribe(this, ModalRoute.of(context)! as PageRoute);
+    print("🏠 UserHomeView didChangeDependencies called");
+    
+    // FIXED: Proper RouteObserver subscription
+    final ModalRoute? route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+      print("🔗 Subscribed to RouteObserver");
     }
   }
 
   @override
   void dispose() {
+    print("🏠 UserHomeView dispose called");
     routeObserver.unsubscribe(this);
     super.dispose();
   }
 
+  // FIXED: All RouteAware methods with logging
+  @override
+  void didPush() {
+    print("🚀 UserHomeView didPush - route was pushed and is now topmost");
+    super.didPush();
+  }
+
   @override
   void didPopNext() {
-    // Called when returning to this screen from another screen
-    print("Returned to UserHomeView - refreshing data");
-    _loadUserData();
-    _loadUserSubjects();
+    // FIXED: This is the key method that should be called when returning from quiz
+    print("🔄 UserHomeView didPopNext - returned from another screen, refreshing data");
+    super.didPopNext();
+    _performAutoRefresh();
+  }
+
+  @override
+  void didPop() {
+    print("🏠 UserHomeView didPop - this route was popped");
+    super.didPop();
+  }
+
+  @override
+  void didPushNext() {
+    print("🏠 UserHomeView didPushNext - another route was pushed on top");
+    super.didPushNext();
   }
 
   void _getInitialInfo() {
-    // achievments = AchievementsModel.getPopularDiets();
+    // Initialize any required data
+  }
+
+  // ENHANCED: Automatic refresh method with logging
+  Future<void> _performAutoRefresh() async {
+    if (_isRefreshing) {
+      print("⏳ Already refreshing, skipping...");
+      return;
+    }
+    
+    setState(() {
+      _isRefreshing = true;
+    });
+
+    try {
+      print("🔄 Auto-refreshing user home data...");
+      await Future.wait([
+        _loadUserData(),
+        _loadUserSubjects(),
+      ]);
+      print("✅ Auto-refresh completed successfully");
+    } catch (e) {
+      print("❌ Auto-refresh failed: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to refresh data'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _performManualRefresh() async {
+    print("🔄 Manual refresh triggered");
+    await _performAutoRefresh();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data refreshed successfully!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _loadUserData() async {
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
 
       if (userDoc.exists) {
         setState(() {
@@ -109,6 +197,7 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
             ),
           ];
         });
+        print("📊 User data loaded: XP=$xp, Streak=$streak, Quizzes=$quizzesTaken");
       }
     } catch (e) {
       debugPrint("Error loading user data: $e");
@@ -118,12 +207,13 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
   Future<void> _loadUserSubjects() async {
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
 
       if (userDoc.exists) {
         List<dynamic> topics = userDoc['subjectsIntroduced'] ?? [];
-
         List<CategoryModel> loaded = topics.map((topic) {
           return CategoryModel.fromSubject(topic.toString());
         }).toList();
@@ -131,22 +221,26 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
         setState(() {
           categories = loaded;
         });
+
+        // OPTIMIZATION 11: Warm up cache for first few subjects
+        for (int i = 0; i < min(2, categories.length); i++) {
+          QuizService.warmUpCache(categories[i].name);
+        }
+        print("📚 Loaded ${categories.length} subjects");
       }
     } catch (e) {
       debugPrint("Error loading user subjects: $e");
     }
   }
 
-  // Navigate to subject selection
   void _navigateToSubjectSelect() {
+    print("➕ Navigating to subject selection");
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => NewSubjectSelectView(username: userName),
       ),
-    ).then((_) {
-      // Reload subjects when returning from subject selection
-      _loadUserSubjects();
-    });
+    );
+    // DON'T add .then() here - RouteObserver will handle the refresh automatically
   }
 
   @override
@@ -165,7 +259,7 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
         elevation: 0.0,
         centerTitle: true,
         iconTheme: const IconThemeData(
-          color: Colors.black, // Sets color for all icons in AppBar
+          color: Colors.black,
           size: 24,
         ),
         leading: GestureDetector(
@@ -185,13 +279,20 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
           ),
         ),
         actions: [
-            IconButton(
-              onPressed: () async {
-                await _loadUserData();
-                await _loadUserSubjects();
-              },
-              icon: const Icon(Icons.refresh),
-            ),
+          IconButton(
+            onPressed: _isRefreshing ? null : _performManualRefresh,
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                    ),
+                  )
+                : const Icon(Icons.refresh),
+            tooltip: _isRefreshing ? 'Refreshing...' : 'Refresh data',
+          ),
           PopupMenuButton<MenuAction>(
             onSelected: (value) async {
               if (value == MenuAction.logout) {
@@ -220,10 +321,8 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
             ),
           ),
           const SizedBox(height: 20),
-          // Subjects section - Now BIGGER
           _categoriesSection(),
           const SizedBox(height: 30),
-          // Stats section - Now SMALLER
           _statsSection(),
           const SizedBox(height: 40),
         ],
@@ -231,79 +330,9 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
     );
   }
 
-  // Stats section - Made SMALLER (reduced height from 240 to 120)
-  Column _statsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 20),
-          child: Text(
-            'My Stats',
-            style: TextStyle(
-              color: Colors.black,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        const SizedBox(height: 15),
-        SizedBox(
-          height: 120, // Reduced from 240 to 120
-          child: ListView.separated(
-            itemBuilder: (context, index) {
-              return Container(
-                width: 120, // Reduced from 210 to 120
-                decoration: BoxDecoration(
-                  color: stats[index].boxColor.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(16), // Reduced radius
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Container(
-                      width: 40, // Reduced from 100 to 50
-                      height: 40, // Reduced from 100 to 50
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6.0), // Reduced padding
-                        child: SvgPicture.asset(
-                          stats[index].iconPath,
-                          width: 24, // Reduced from 40 to 24
-                          height: 24, // Reduced from 40 to 24
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                      child: Text(
-                        stats[index].name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black,
-                          fontSize: 12, // Reduced from 16 to 12
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-            separatorBuilder: (context, index) => const SizedBox(width: 15), // Reduced separation
-            itemCount: stats.length,
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-          ),
-        ),
-      ],
-    );
-  }
+  // Keep your existing _statsSection() and _categoriesSection() methods unchanged
+  // But UPDATE the quiz navigation in _categoriesSection():
 
-  // Categories section - Made BIGGER (increased height from 120 to 200)
   Column _categoriesSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -342,7 +371,7 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
         ),
         const SizedBox(height: 15),
         SizedBox(
-          height: 200, // Increased from 120 to 200
+          height: 200,
           child: categories.isEmpty
               ? Center(
                   child: Column(
@@ -350,7 +379,7 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
                     children: [
                       Icon(
                         Icons.school_outlined,
-                        size: 48, // Increased from 32 to 48
+                        size: 48,
                         color: Colors.grey.shade400,
                       ),
                       const SizedBox(height: 12),
@@ -358,7 +387,7 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
                         "No subjects yet",
                         style: TextStyle(
                           color: Colors.grey.shade600,
-                          fontSize: 16, // Increased from 14 to 16
+                          fontSize: 16,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -366,7 +395,7 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
                         "Tap + to add subjects",
                         style: TextStyle(
                           color: Colors.grey.shade500,
-                          fontSize: 14, // Increased from 12 to 14
+                          fontSize: 14,
                         ),
                       ),
                     ],
@@ -376,12 +405,11 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
                   itemCount: categories.length,
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: 25),
+                  separatorBuilder: (context, index) => const SizedBox(width: 25),
                   itemBuilder: (context, index) {
                     return GestureDetector(
-                      // In your _categoriesSection() onTap method in UserHomeView
                       onTap: () {
+                        print("🎯 Starting quiz for ${categories[index].name}");
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => QuizLoadingView(
@@ -389,34 +417,31 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
                               subjectName: categories[index].name,
                             ),
                           ),
-                        ).then((_) {
-                          // This code runs when user returns from quiz
-                          _loadUserData();
-                          _loadUserSubjects();
-                        });
+                        );
+                        // DON'T add .then() here - RouteObserver will handle refresh automatically
                       },
                       child: Container(
-                        width: 140, // Increased from 100 to 140
+                        width: 140,
                         decoration: BoxDecoration(
                           color: categories[index].boxColor.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(20), // Increased radius
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
                             Container(
-                              width: 80, // Increased from 50 to 80
-                              height: 80, // Increased from 50 to 80
+                              width: 80,
+                              height: 80,
                               decoration: const BoxDecoration(
                                 color: Colors.white,
                                 shape: BoxShape.circle,
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.all(12.0), // Increased padding
+                                padding: const EdgeInsets.all(12.0),
                                 child: SvgPicture.asset(
                                   categories[index].iconPath,
-                                  width: 40, // Increased from 24 to 40
-                                  height: 40, // Increased from 24 to 40
+                                  width: 40,
+                                  height: 40,
                                 ),
                               ),
                             ),
@@ -425,9 +450,9 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
                               child: Text(
                                 categories[index].name,
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.w600, // Increased weight
+                                  fontWeight: FontWeight.w600,
                                   color: Colors.black,
-                                  fontSize: 16, // Increased from 14 to 16
+                                  fontSize: 16,
                                 ),
                                 textAlign: TextAlign.center,
                               ),
@@ -438,6 +463,78 @@ class _UserHomeViewState extends State<UserHomeView> with RouteAware {
                     );
                   },
                 ),
+        ),
+      ],
+    );
+  }
+
+  // Keep your existing _statsSection() method unchanged
+  Column _statsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(left: 20),
+          child: Text(
+            'My Stats',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(height: 15),
+        SizedBox(
+          height: 120,
+          child: ListView.separated(
+            itemBuilder: (context, index) {
+              return Container(
+                width: 120,
+                decoration: BoxDecoration(
+                  color: stats[index].boxColor.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6.0),
+                        child: SvgPicture.asset(
+                          stats[index].iconPath,
+                          width: 24,
+                          height: 24,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: Text(
+                        stats[index].name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+            separatorBuilder: (context, index) => const SizedBox(width: 15),
+            itemCount: stats.length,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+          ),
         ),
       ],
     );

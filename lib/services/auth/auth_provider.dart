@@ -3,6 +3,9 @@ import 'package:learningdart/services/auth/auth_user.dart';
 abstract class AuthProvider {
   AuthUser? get currentUser;
 
+  // ADD THIS: Auth state changes stream
+  Stream<AuthUser?> get authStateChanges;
+
   Future<void> initialize();
   
   Future<AuthUser> logIn({
